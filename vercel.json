@@ -1,9 +1,9 @@
 {
     "version": 2,
-    "buildCommand": "cd apps/ls-landing && npm install && npm run build",
-    "installCommand": "cd apps/ls-landing && npm install",
+    "buildCommand": "cd apps/jss-app && npm install && npm run build",
+    "installCommand": "cd apps/jss-app && npm install",
     "framework": "nextjs",
-    "outputDirectory": "apps/ls-landing/.next",
+    "outputDirectory": "apps/jss-app/.next",
     "name": "ledger-snap-v1",
     "rewrites": [
         {
