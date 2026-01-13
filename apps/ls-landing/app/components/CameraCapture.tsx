@@ -12,26 +12,42 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
 
     const requestCameraPermission = async () => {
         try {
+            console.log('Requesting camera permission...');
+
+            // iOS Optimization: Avoid specifying 16:9 dimensions to prevent center-cropping.
+            // Using 'ideal' with high values asks for the best available resolution from the sensor (usually 4:3).
             const constraints: MediaStreamConstraints = {
                 video: {
-                    facingMode: 'environment', // Use back camera on mobile
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
-                    // 1x Zoom Fix: Force zoom to 1 if supported
-                    zoom: 1, 
-                } as MediaTrackConstraints, // Cast to handle non-standard zoom property
+                    facingMode: 'environment',
+                    width: { ideal: 4096 },
+                    height: { ideal: 2160 },
+                }
             };
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('Camera stream obtained');
 
-            // Apply 1x zoom explicitly if track supports it
+            // 1x Zoom Fix for Android (and compatible browsers)
             const track = stream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities() as any; // Cast for zoom capability
+            const capabilities = track.getCapabilities() as any;
+            const settings = track.getSettings();
+
+            console.log('Track capabilities:', capabilities);
+            console.log('Track settings:', settings);
+
             if (capabilities.zoom) {
-                await track.applyConstraints({
-                    advanced: [{ zoom: 1 }] as any
-                });
-                console.log('Applied 1x zoom fix');
+                console.log(`Zoom capability detected. Range: ${capabilities.zoom.min} - ${capabilities.zoom.max}`);
+                // Apply 1x zoom explicitly via advanced constraints to reset lens driver
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ zoom: 1.0 }] as any
+                    });
+                    console.log('Applied 1x zoom fix via advanced constraints');
+                } catch (e) {
+                    console.warn('Failed to apply advanced zoom constraint:', e);
+                }
+            } else {
+                console.log('Zoom capability NOT supported by this device/browser (typical for iOS Safari)');
             }
 
             streamRef.current = stream;
@@ -42,9 +58,9 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
                 videoRef.current.srcObject = stream;
             }
         } catch (err) {
-            console.error('Camera permission denied:', err);
+            console.error('Camera permission/access error:', err);
             setHasPermission(false);
-            setError('相机权限被拒绝。请在设置中允许访问相机。');
+            setError('相机权限被拒绝或无法访问。请检查权限设置。');
         }
     };
 
