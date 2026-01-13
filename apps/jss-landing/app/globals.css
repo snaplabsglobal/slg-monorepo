@@ -1,0 +1,113 @@
+/* JobSite Snap Landing - 掌控全局 (Command Center) */
+/* Visual Identity: Authoritative, Strategic, Control-focused */
+
+:root {
+  /* Primary Colors - Deep Navy (Authority) */
+  --jss-primary: #1C1C1E;
+  --jss-primary-light: #2C2C2E;
+  --jss-primary-dark: #000000;
+
+  /* Accent - Gold (Premium, Value) */
+  --jss-gold: #FFD60A;
+  --jss-gold-dark: #FFCC00;
+  --jss-gold-light: #FFE55C;
+
+  /* Secondary - Emerald (Growth, Profit) */
+  --jss-emerald: #00C805;
+  --jss-emerald-dark: #00A004;
+
+  /* Neutrals */
+  --jss-white: #FFFFFF;
+  --jss-gray-50: #F5F5F7;
+  --jss-gray-100: #E5E5E5;
+  --jss-gray-200: #D1D1D6;
+  --jss-gray-700: #48484A;
+  --jss-gray-800: #3A3A3C;
+  --jss-gray-900: #1C1C1E;
+
+  /* Typography - Bold, Authoritative */
+  --jss-font: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  --jss-text-xs: 12px;
+  --jss-text-sm: 14px;
+  --jss-text-base: 16px;
+  --jss-text-lg: 20px;
+  --jss-text-xl: 24px;
+  --jss-text-2xl: 32px;
+  --jss-text-3xl: 48px;
+  --jss-text-4xl: 64px;
+  --jss-text-5xl: 80px;
+
+  --jss-weight-regular: 400;
+  --jss-weight-medium: 500;
+  --jss-weight-semibold: 600;
+  --jss-weight-bold: 700;
+  --jss-weight-heavy: 800;
+
+  /* Spacing - Wide, Dashboard-like */
+  --jss-space-1: 4px;
+  --jss-space-2: 8px;
+  --jss-space-3: 16px;
+  --jss-space-4: 24px;
+  --jss-space-5: 32px;
+  --jss-space-6: 48px;
+  --jss-space-7: 64px;
+  --jss-space-8: 96px;
+
+  /* Border Radius */
+  --jss-radius-sm: 4px;
+  --jss-radius-md: 8px;
+  --jss-radius-lg: 12px;
+  --jss-radius-xl: 16px;
+
+  /* Shadows - Elevated */
+  --jss-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --jss-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --jss-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  /* Animations - Smooth, Confident */
+  --jss-duration-quick: 200ms;
+  --jss-duration-standard: 300ms;
+  --jss-duration-slow: 400ms;
+  --jss-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--jss-font);
+  background-color: var(--jss-primary);
+  color: var(--jss-white);
+  font-size: var(--jss-text-base);
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Gold focus states */
+*:focus-visible {
+  outline: 2px solid var(--jss-gold);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--jss-gold);
+  color: var(--jss-primary);
+}

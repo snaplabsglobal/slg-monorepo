@@ -1,0 +1,40 @@
+{
+    "name": "@slo/snap-ui",
+    "version": "1.0.0",
+    "description": "SnapUI Design System - Shared component library for SnapLabs Global",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": "./dist/index.js",
+        "./styles": "./styles/index.css",
+        "./tokens": "./tokens/index.ts"
+    },
+    "scripts": {
+        "build": "tsc && npm run build:css",
+        "build:css": "cat styles/*.css > dist/styles.css",
+        "dev": "tsc --watch",
+        "lint": "eslint .",
+        "type-check": "tsc --noEmit",
+        "test": "vitest",
+        "storybook": "storybook dev -p 6006",
+        "build-storybook": "storybook build"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "framer-motion": "^10.16.16"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.45",
+        "@types/react-dom": "^18.2.18",
+        "typescript": "^5.3.3",
+        "vitest": "^1.1.0",
+        "@testing-library/react": "^14.1.2",
+        "@storybook/react": "^7.6.6",
+        "@storybook/addon-essentials": "^7.6.6"
+    },
+    "peerDependencies": {
+        "react": "^18.0.0",
+        "react-dom": "^18.0.0"
+    }
+}

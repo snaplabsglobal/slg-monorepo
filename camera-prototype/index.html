@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>LedgerSnap v2.0 - User Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Views */
+        .view {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+        }
+
+        .view.active {
+            display: flex;
+        }
+
+        /* Camera View */
+        #cameraView {
+            z-index: 10;
+        }
+
+        video {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Guide Frame */
+        .guide-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            max-width: 420px;
+            aspect-ratio: 3/4;
+            pointer-events: none;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+        }
+
+        .guide-hint {
+            position: absolute;
+            top: -40px;
+            width: 100%;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        /* Shutter */
+        .controls {
+            position: absolute;
+            bottom: 48px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .shutter-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: transform 0.1s;
+            cursor: pointer;
+        }
+
+        .shutter-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* Review View */
+        #reviewScreen {
+            z-index: 30;
+            background: #111;
+        }
+
+        .crop-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #previewImage {
+            max-width: 100%;
+            max-height: 100%;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #cropCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            touch-action: none;
+        }
+
+        /* Action Bar */
+        .action-bar {
+            height: 100px;
+            background: #000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 32px;
+            padding-bottom: 20px;
+        }
+
+        .btn {
+            font-size: 16px;
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 24px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-retake {
+            background: #333;
+            color: #fff;
+        }
+
+        .btn-confirm {
+            background: #0A84FF;
+            color: #fff;
+        }
+
+        .btn:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
+
+        /* Job Badge */
+        .job-badge {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 20;
+        }
+
+        /* Task Tray */
+        .task-tray {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+        }
+
+        .tray-item {
+            width: 48px;
+            height: 64px;
+            background: #333;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tray-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Camera Viewfinder -->
+    <div id="cameraView" class="view active">
+        <div class="job-badge">💼 Default Job</div>
+        <video id="video" autoplay playsinline muted></video>
+
+        <div class="guide-frame">
+            <div class="guide-hint">Align Receipt</div>
+        </div>
+
+        <div class="controls">
+            <div class="shutter-btn" id="shutterBtn"></div>
+        </div>
+        <div class="task-tray" id="taskTray"></div>
+    </div>
+
+    <!-- Review & Crop Screen -->
+    <div id="reviewScreen" class="view">
+        <div class="crop-container" id="cropContainer">
+            <img id="previewImage" />
+            <canvas id="cropCanvas"></canvas>
+        </div>
+        <div class="action-bar">
+            <button class="btn btn-retake" id="retakeBtn">Retake</button>
+            <button class="btn btn-confirm" id="confirmBtn">Confirm</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const CONFIG = {
+            video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 }, // High res
+                height: { ideal: 1080 },
+                zoom: 1 // Attempt to force 1x
+            }
+        };
+
+        // --- State ---
+        let stream = null;
+        let imageCapture = null;
+        let capturedBlob = null;
+        let corners = []; // [tl, tr, br, bl] {x, y} localized to canvas
+        let activeCornerIndex = -1;
+        let imgRect = { x: 0, y: 0, w: 0, h: 0 }; // Image position in canvas
+
+        // --- DOM Elements ---
+        const cameraView = document.getElementById('cameraView');
+        const reviewScreen = document.getElementById('reviewScreen');
+        const video = document.getElementById('video');
+        const previewImage = document.getElementById('previewImage');
+        const cropCanvas = document.getElementById('cropCanvas');
+        const ctx = cropCanvas.getContext('2d');
+
+        // --- Initialization ---
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: CONFIG.video,
+                    audio: false
+                });
+                video.srcObject = stream;
+
+                // Track video for ImageCapture API if available
+                const track = stream.getVideoTracks()[0];
+                imageCapture = new ImageCapture(track);
+
+                // Try to apply advanced constraints if possible
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    track.applyConstraints({ advanced: [{ zoom: 1 }] }).catch(e => console.log('Zoom fix failed', e));
+                }
+            } catch (err) {
+                console.error("Camera Init Error:", err);
+                alert("Camera access failed. Please ensure HTTPS and permissions.");
+            }
+        }
+
+        // --- Core Workflow ---
+        document.getElementById('shutterBtn').addEventListener('click', async () => {
+            // Haptic
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            try {
+                // Flash effect
+                cameraView.style.opacity = '0';
+                setTimeout(() => cameraView.style.opacity = '1', 100);
+
+                // Capture high-res frame
+                let blob;
+                if (imageCapture) {
+                    blob = await imageCapture.takePhoto();
+                } else {
+                    // Fallback to canvas dump
+                    const c = document.createElement('canvas');
+                    c.width = video.videoWidth;
+                    c.height = video.videoHeight;
+                    c.getContext('2d').drawImage(video, 0, 0);
+                    blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
+                }
+
+                capturedBlob = blob;
+                const url = URL.createObjectURL(blob);
+                previewImage.onload = () => {
+                    initCropper();
+                    switchView('review');
+                };
+                previewImage.src = url;
+
+            } catch (error) {
+                console.error("Capture Failed:", error);
+                alert("Capture failed");
+            }
+        });
+
+        document.getElementById('retakeBtn').addEventListener('click', () => {
+            resetReview();
+            switchView('camera');
+        });
+
+        document.getElementById('confirmBtn').addEventListener('click', async () => {
+            // Apply Crop
+            const croppedBlob = await applyCrop();
+            addTrayItem(croppedBlob);
+            resetReview();
+            switchView('camera');
+        });
+
+        function switchView(mode) {
+            if (mode === 'review') {
+                cameraView.classList.remove('active');
+                reviewScreen.classList.add('active');
+            } else {
+                reviewScreen.classList.remove('active');
+                cameraView.classList.add('active');
+            }
+        }
+
+        function addTrayItem(blob) {
+            const url = URL.createObjectURL(blob);
+            const div = document.createElement('div');
+            div.className = 'tray-item';
+            div.innerHTML = `<img src="${url}">`;
+            document.getElementById('taskTray').appendChild(div);
+        }
+
+        function resetReview() {
+            previewImage.src = '';
+            corners = [];
+        }
+
+        // --- Cropping Engine ---
+        function initCropper() {
+            // Resize canvas to match container
+            const container = document.getElementById('cropContainer');
+            cropCanvas.width = container.clientWidth;
+            cropCanvas.height = container.clientHeight;
+
+            // Calculate image position (object-fit: contain logic)
+            const cw = cropCanvas.width;
+            const ch = cropCanvas.height;
+            const iw = previewImage.naturalWidth;
+            const ih = previewImage.naturalHeight;
+            const scale = Math.min(cw / iw, ch / ih);
+
+            imgRect.w = iw * scale;
+            imgRect.h = ih * scale;
+            imgRect.x = (cw - imgRect.w) / 2;
+            imgRect.y = (ch - imgRect.h) / 2;
+
+            // Init corners (default to 80% inset)
+            const padX = imgRect.w * 0.1;
+            const padY = imgRect.h * 0.1;
+
+            corners = [
+                { x: imgRect.x + padX, y: imgRect.y + padY },               // TL
+                { x: imgRect.x + imgRect.w - padX, y: imgRect.y + padY },   // TR
+                { x: imgRect.x + imgRect.w - padX, y: imgRect.y + imgRect.h - padY }, // BR
+                { x: imgRect.x + padX, y: imgRect.y + imgRect.h - padY }    // BL
+            ];
+
+            drawCropOverlay();
+        }
+
+        // Touch/Mouse Handling
+        let isDragging = false;
+
+        function getEventPos(e) {
+            const t = e.touches ? e.touches[0] : e;
+            const rect = cropCanvas.getBoundingClientRect();
+            return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+        }
+
+        function handleStart(e) {
+            e.preventDefault();
+            const pos = getEventPos(e);
+            // Find nearest corner
+            let minDist = 60; // Increased hit radius for mobile
+            activeCornerIndex = -1;
+
+            corners.forEach((c, i) => {
+                const dist = Math.hypot(c.x - pos.x, c.y - pos.y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    activeCornerIndex = i;
+                }
+            });
+
+            if (activeCornerIndex !== -1) {
+                isDragging = true;
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            const pos = getEventPos(e);
+
+            // Constrain to image bounds
+            const x = Math.max(imgRect.x, Math.min(imgRect.x + imgRect.w, pos.x));
+            const y = Math.max(imgRect.y, Math.min(imgRect.y + imgRect.h, pos.y));
+
+            corners[activeCornerIndex] = { x, y };
+            drawCropOverlay();
+        }
+
+        function handleEnd() {
+            isDragging = false;
+        }
+
+        cropCanvas.addEventListener('mousedown', handleStart);
+        cropCanvas.addEventListener('mousemove', handleMove);
+        cropCanvas.addEventListener('mouseup', handleEnd);
+        cropCanvas.addEventListener('touchstart', handleStart);
+        cropCanvas.addEventListener('touchmove', handleMove);
+        cropCanvas.addEventListener('touchend', handleEnd);
+
+        function drawCropOverlay() {
+            ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+
+            // Darken outside
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+
+            // Clear 'hole' for crop area
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            ctx.lineTo(corners[1].x, corners[1].y);
+            ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.closePath();
+            ctx.clip();
+            ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+            ctx.restore();
+
+            // Draw lines
+            ctx.strokeStyle = '#0A84FF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            ctx.lineTo(corners[1].x, corners[1].y);
+            ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Draw handles
+            ctx.fillStyle = '#fff';
+            corners.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        async function applyCrop() {
+            // Mapping screen coords to image coords
+            const scaleX = previewImage.naturalWidth / imgRect.w;
+            const scaleY = previewImage.naturalHeight / imgRect.h;
+
+            const realCorners = corners.map(c => ({
+                x: (c.x - imgRect.x) * scaleX,
+                y: (c.y - imgRect.y) * scaleY
+            }));
+
+            // Simple rectangle crop (bounding box) for MVP
+            // Advanced: Perspective correction (WASM) - skipped for now
+            const minX = Math.min(...realCorners.map(c => c.x));
+            const maxX = Math.max(...realCorners.map(c => c.x));
+            const minY = Math.min(...realCorners.map(c => c.y));
+            const maxY = Math.max(...realCorners.map(c => c.y));
+            const w = maxX - minX;
+            const h = maxY - minY;
+
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(previewImage, minX, minY, w, h, 0, 0, w, h);
+
+            return new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
+        }
+
+        // Start
+        initCamera();
+
+    </script>
+</body>
+
+</html>

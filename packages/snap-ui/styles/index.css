@@ -1,0 +1,45 @@
+/**
+ * SnapUI Design System - Main Styles Entry Point
+ */
+
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';
+@import './animations.css';
+
+/* Global Resets */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* Base Styles */
+body {
+    font-family: var(--snap-font-web);
+    font-size: var(--snap-text-base);
+    line-height: var(--snap-leading-base);
+    color: var(--snap-gray-900);
+    background-color: var(--snap-glacier);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus Styles */
+*:focus-visible {
+    outline: 2px solid var(--snap-emerald);
+    outline-offset: 2px;
+}
+
+/* Smooth Scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Selection Styles */
+::selection {
+    background-color: var(--snap-emerald);
+    color: white;
+}

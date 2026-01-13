@@ -1,0 +1,32 @@
+/**
+ * SnapUI Design System - Spacing Tokens
+ * 
+ * 8px grid system (8px律)
+ */
+
+:root {
+    /* Spacing Scale */
+    --snap-space-1: 4px;
+    --snap-space-2: 8px;
+    --snap-space-3: 16px;
+    --snap-space-4: 24px;
+    --snap-space-5: 32px;
+    --snap-space-6: 48px;
+    --snap-space-7: 64px;
+    --snap-space-8: 96px;
+    --snap-space-9: 128px;
+
+    /* Border Radius */
+    --snap-radius-sm: 4px;
+    --snap-radius-md: 8px;
+    --snap-radius-lg: 12px;
+    --snap-radius-xl: 16px;
+    --snap-radius-full: 9999px;
+
+    /* Shadows */
+    --snap-shadow-0: none;
+    --snap-shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --snap-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+    --snap-shadow-3: 0 8px 24px rgba(0, 0, 0, 0.15);
+    --snap-shadow-4: 0 16px 48px rgba(0, 0, 0, 0.20);
+}

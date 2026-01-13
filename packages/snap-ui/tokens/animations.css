@@ -1,0 +1,62 @@
+/**
+ * SnapUI Design System - Animation Tokens
+ */
+
+:root {
+    /* Durations */
+    --snap-duration-instant: 100ms;
+    --snap-duration-quick: 200ms;
+    --snap-duration-standard: 300ms;
+    --snap-duration-slow: 400ms;
+
+    /* Easing Functions */
+    --snap-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --snap-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+    --snap-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+    --snap-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Keyframe Animations */
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+@keyframes snap-toast-slide-in {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes snap-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes snap-slide-up {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
