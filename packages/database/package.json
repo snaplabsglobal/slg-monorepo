@@ -1,0 +1,14 @@
+{
+    "name": "@slg/database",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "db:push": "supabase db push",
+        "db:pull": "supabase db pull",
+        "typegen": "supabase gen types typescript --local > src/types.ts",
+        "dev": "supabase start"
+    },
+    "devDependencies": {
+        "supabase": "^1.131.0"
+    }
+}

@@ -1,5 +1,5 @@
 {
-    "name": "@slo/snap-types",
+    "name": "@slg/snap-types",
     "version": "1.0.0",
     "description": "Shared TypeScript types for SnapLabs Global",
     "main": "./dist/index.js",

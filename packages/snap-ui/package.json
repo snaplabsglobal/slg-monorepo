@@ -1,5 +1,5 @@
 {
-    "name": "@slo/snap-ui",
+    "name": "@slg/snap-ui",
     "version": "1.0.0",
     "description": "SnapUI Design System - Shared component library for SnapLabs Global",
     "main": "./dist/index.js",

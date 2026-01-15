@@ -1,5 +1,5 @@
 {
-    "name": "@slo/eslint-config",
+    "name": "@slg/eslint-config",
     "version": "1.0.0",
     "description": "Shared ESLint configuration for SnapLabs Global",
     "main": "index.js",

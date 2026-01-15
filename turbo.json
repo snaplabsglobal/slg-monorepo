@@ -1,7 +1,10 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "globalDependencies": [
-        "**/.env.*local"
+        "**/.env.*local",
+        "tsconfig.json",
+        "package.json",
+        "turbo.json"
     ],
     "pipeline": {
         "build": {
@@ -14,9 +17,16 @@
                 "dist/**"
             ]
         },
+        "// 💡 核心新增：数据库代码生成，确保共享包的类型定义永远是最新的": {},
+        "db:generate": {
+            "cache": false
+        },
         "dev": {
             "cache": false,
-            "persistent": true
+            "persistent": true,
+            "dependsOn": [
+                "db:generate"
+            ]
         },
         "lint": {
             "dependsOn": [
@@ -28,9 +38,10 @@
                 "^type-check"
             ]
         },
+        "// 💡 优化：测试不需要等待 build，只需要等待类型检查通过即可": {},
         "test": {
             "dependsOn": [
-                "^build"
+                "^type-check"
             ],
             "outputs": [
                 "coverage/**"
