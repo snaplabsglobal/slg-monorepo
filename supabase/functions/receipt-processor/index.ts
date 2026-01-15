@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
         taxInstructions = `This is a US-based receipt. Extract Sales Tax and identify potential 1099 contractor expenses.`
     }
 
-    const prompt = `
+    // 5. Construct Prompt
+
       Please analyze this receipt image and extract the following transaction details into a strict JSON format.
       The user's preferred language is "${lang}".
       Jurisdiction: ${country}-${region}.
@@ -83,8 +84,11 @@ Deno.serve(async (req) => {
       - gst (number, 5% if in BC and applicable, extract exact amount if visible. If US, use 0)
       - pst (number, 7% if in BC and applicable, extract exact amount if visible. If US, use 0)
       - sales_tax (number, use this for US Sales Tax or combined tax if not split)
+      - state_tax (number, if US and split out separately)
+      - local_tax (number, if US and split out separately)
       - tip (number)
-      - transaction_id (string, receipt number)
+      - transaction_id (string, receipt number or Invoice Number)
+      - invoice_number (string, if distinct from transaction_id, otherwise same)
       - merchant_address (string)
       - payment_method (string)
       - time (HH:MM)
@@ -92,6 +96,7 @@ Deno.serve(async (req) => {
       - summary (string, short description in ${lang})
       - is_expense (boolean, true for receipts)
       - is_contractor_expense (boolean, true if likely a service requiring 1099/T5018)
+      - suggest_asset (boolean, true if item is durable/equipment AND total_amount > 1000)
       - confidence (number, 0-1)
       
       ... (Include other relevant standard fields)
@@ -131,6 +136,10 @@ Deno.serve(async (req) => {
       date: extractedData.date,
       gst_amount: extractedData.gst,
       pst_amount: extractedData.pst,
+      state_tax_amount: extractedData.state_tax,
+      local_tax_amount: extractedData.local_tax,
+      invoice_number: extractedData.invoice_number,
+      is_asset: extractedData.suggest_asset,
       gl_category: extractedData.category,
       description: extractedData.summary,
       status: 'needs_review',
