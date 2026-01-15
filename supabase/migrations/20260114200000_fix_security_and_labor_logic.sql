@@ -94,17 +94,25 @@ DROP TRIGGER IF EXISTS ai_parsing_trigger ON storage.objects;
 DROP TRIGGER IF EXISTS process_on_upload ON storage.objects;
 
 -- Create secure trigger calling Edge Function via Internal Supabase Network
-CREATE TRIGGER receipt_processing_trigger
-AFTER INSERT ON storage.objects
-FOR EACH ROW
-WHEN (new.bucket_id = 'receipt-images')
-EXECUTE FUNCTION supabase_functions.http_request(
-    'https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor',
-    'POST',
-    '{"Content-type":"application/json"}',
-    '{}',
-    '5000'
-);
+-- EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor',
+--     'POST',
+--     '{"Content-type":"application/json"}',
+--     '{}',
+--     '5000'
+-- );
+-- 
+-- CREATE TRIGGER receipt_processing_trigger
+-- AFTER INSERT ON storage.objects
+-- FOR EACH ROW
+-- WHEN (new.bucket_id = 'receipt-images')
+-- EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor',
+--     'POST',
+--     '{"Content-type":"application/json"}',
+--     '{}',
+--     '5000'
+-- );
 
 -- [4] RLS Multi-Tenancy Security Walls
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;

@@ -1,9 +1,9 @@
 {
     "version": 2,
-    "buildCommand": "cd apps/jss-app && npm install && npm run build",
-    "installCommand": "cd apps/jss-app && npm install",
+    "buildCommand": "cd apps/corporate-hub && npm install && npm run build",
+    "installCommand": "cd apps/corporate-hub && npm install",
     "framework": "nextjs",
-    "outputDirectory": "apps/jss-app/.next",
+    "outputDirectory": "apps/corporate-hub/.next",
     "name": "ledger-snap-v1",
     "rewrites": [
         {

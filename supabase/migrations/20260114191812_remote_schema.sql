@@ -1286,8 +1286,6 @@ using (((bucket_id = 'receipt-images'::text) AND ((storage.foldername(name))[1] 
   WHERE (organization_members.user_id = auth.uid())))));
 
 
-CREATE TRIGGER ai_parsing_trigger AFTER INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor ', 'POST', '{"Content-type":"application/json","Bearer":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxYnVkd2Rsd29naW1yemRtZHVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNjc4NjcsImV4cCI6MjA4MzY0Mzg2N30.EhItbmW4dnYmiSuCeuX-u6xF5roPtIzCGWrH9fd9thE"}', '{}', '5000');
-
-CREATE TRIGGER process_on_upload AFTER INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor ', 'POST', '{"Content-type":"application/json"}', '{}', '5000');
-
-
+-- CREATE TRIGGER ai_parsing_trigger AFTER INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor ', 'POST', '{"Content-type":"application/json","Bearer":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxYnVkd2Rsd29naW1yemRtZHVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNjc4NjcsImV4cCI6MjA4MzY0Mzg2N30.EhItbmW4dnYmiSuCeuX-u6xF5roPtIzCGWrH9fd9thE"}', '{}', '5000');
+-- 
+-- CREATE TRIGGER process_on_upload AFTER INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://zqbudwdlwogimrzdmduq.supabase.co/functions/v1/receipt-processor ', 'POST', '{"Content-type":"application/json"}', '{}', '5000');
