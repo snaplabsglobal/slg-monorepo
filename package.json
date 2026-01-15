@@ -9,6 +9,7 @@
     ],
     "scripts": {
         "dev": "turbo run dev",
+        "deploy:dev": "git push origin develop",
         "build": "turbo run build",
         "test": "turbo run test",
         "lint": "turbo run lint",
