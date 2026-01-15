@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS postgis SCHEMA extensions;
 
 -- [1] 扩展交易表，增加审计级元数据
 ALTER TABLE public.transactions 
-ADD COLUMN IF NOT EXISTS "gps_location" geography(POINT),        -- 地理位置
+ADD COLUMN IF NOT EXISTS "gps_location" extensions.geography(POINT),        -- 地理位置
 ADD COLUMN IF NOT EXISTS "payment_method_last4" TEXT,            -- 支付卡末四位
 ADD COLUMN IF NOT EXISTS "business_purpose" TEXT,                -- 业务用途
 ADD COLUMN IF NOT EXISTS "state_tax_amount" numeric(15,2),       -- 美国州税
