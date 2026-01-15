@@ -1,3 +1,6 @@
+-- [0] Enable PostGIS for GPS location support
+CREATE EXTENSION IF NOT EXISTS postgis SCHEMA extensions;
+
 -- [1] 扩展交易表，增加审计级元数据
 ALTER TABLE public.transactions 
 ADD COLUMN IF NOT EXISTS "gps_location" geography(POINT),        -- 地理位置

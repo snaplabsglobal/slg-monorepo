@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. Construct Prompt
-
+    const prompt = `
       Please analyze this receipt image and extract the following transaction details into a strict JSON format.
       The user's preferred language is "${lang}".
       Jurisdiction: ${country}-${region}.
@@ -81,11 +81,8 @@ Deno.serve(async (req) => {
       - date (YYYY-MM-DD)
       - category (string, infer from content)
       - subtotal (number)
-      - gst (number, 5% if in BC and applicable, extract exact amount if visible. If US, use 0)
-      - pst (number, 7% if in BC and applicable, extract exact amount if visible. If US, use 0)
-      - sales_tax (number, use this for US Sales Tax or combined tax if not split)
-      - state_tax (number, if US and split out separately)
-      - local_tax (number, if US and split out separately)
+      - primary_tax (number, GST for Canada, State Tax for US, or main tax)
+      - secondary_tax (number, PST for Canada, Local Tax for US, or secondary tax)
       - tip (number)
       - transaction_id (string, receipt number or Invoice Number)
       - invoice_number (string, if distinct from transaction_id, otherwise same)
@@ -102,7 +99,9 @@ Deno.serve(async (req) => {
       ... (Include other relevant standard fields)
 
       ${taxInstructions}
-      If text isn't clear, estimate confidence lower.
+      Map specific taxes to:
+      - primary_tax: GST (CA) or State Tax (US)
+      - secondary_tax: PST (CA) or Local Tax (US)
       
       Output ONLY raw JSON. No markdown formatting.
     `
@@ -134,10 +133,10 @@ Deno.serve(async (req) => {
       amount: extractedData.total_amount,
       currency: extractedData.currency,
       date: extractedData.date,
-      gst_amount: extractedData.gst,
-      pst_amount: extractedData.pst,
-      state_tax_amount: extractedData.state_tax,
-      local_tax_amount: extractedData.local_tax,
+      primary_tax_amount: extractedData.primary_tax,
+      secondary_tax_amount: extractedData.secondary_tax,
+      gst_amount: 0, // Deprecated/Legacy compatibility if needed or just remove. Keeping 0/null.
+      pst_amount: 0,
       invoice_number: extractedData.invoice_number,
       is_asset: extractedData.suggest_asset,
       gl_category: extractedData.category,
