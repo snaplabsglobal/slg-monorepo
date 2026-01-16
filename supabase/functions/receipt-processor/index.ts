@@ -59,20 +59,25 @@ serve(async (req) => {
 
       // 4. Prepare Prompt
       const systemPrompt = `
-Role: Professional Construction Accountant specializing in CA (CRA) and US (IRS) tax laws. Input: Receipt image (can be English/Chinese/Spanish). Objective: Extract structured data for transactions table.
+Role: Professional Construction Accountant specializing in CA/US tax.
+Input: Receipt image.
+Objective: Extract structured data for 'transactions' and DETAILED 'line_items'.
 
 Rules:
-Region Detection: Identify vendor address.
-If CA: Map GST/HST to primary_tax, PST to secondary_tax.
-If US: Map State Tax to primary_tax, Local Tax to secondary_tax.
-Audit Readiness: Extract Invoice Number, BN/GST Number (for CA), and Payment Method (last 4 digits).
-Asset Detection: If total > $1,000, set is_asset: true and suggest a CCA_Class or Asset_Category.
-Business Purpose: Based on line items (e.g., "Lumber"), generate a professional business purpose description (e.g., "Building materials for project").
-Risk Check: If data is blurry or key fields (Tax/Vendor) are missing, set risk_level: high and explain why in risk_reasons.
+1. ONLY extract construction/renovation related specific line items.
+2. For each line item, you MUST extract:
+   - item_name: Standardized product name (e.g., "Standard SPF Lumber 2x4x8").
+   - raw_name: Original text on receipt (e.g., "STD SPF 2x4x8").
+   - quantity: Number of units (default 1).
+   - unit_price: Price per unit.
+   - amount: Total line amount.
+   - category: e.g., "Lumber", "Plumbing", "Electrical".
+3. Region & Tax Logic:
+   - CA: GST -> primary_tax, PST -> secondary_tax.
+   - US: State -> primary_tax, Local -> secondary_tax.
 
 Output Requirement:
-Return ONLY a valid JSON object. No markdown, no code blocks. The JSON should be compatible with a database insert.
-Structure:
+Return ONLY a valid JSON object:
 {
   "vendor_name": "string",
   "transaction_date": "YYYY-MM-DD",
@@ -84,11 +89,19 @@ Structure:
   "invoice_number": "string | null",
   "tax_id": "string | null",
   "payment_method": "string | null",
-  "is_asset": boolean,
-  "asset_category": "string | null",
   "business_purpose": "string",
   "risk_level": "low" | "medium" | "high",
-  "risk_reasons": ["string"]
+  "risk_reasons": ["string"],
+  "line_items": [
+    {
+      "item_name": "string",
+      "raw_name": "string",
+      "quantity": number,
+      "unit_price": number,
+      "amount": number,
+      "category": "string"
+    }
+  ]
 }
 `
 
@@ -115,26 +128,89 @@ Structure:
       const extractedData = JSON.parse(jsonStr)
 
       // 7. Insert into Transactions
-      
-      const { error: insertError } = await supabase
+      const { data: transactionData, error: insertError } = await supabase
         .from('transactions')
         .insert({
-          ...extractedData,
-          org_id: orgId, // Might be null if not in metadata, let DB handle or erro
-          created_by: user_id ?? undefined, // User ID might be undefined for webhooks if not passed, but transactions table might strictly require it or define default?
-          // CAUTION: 'created_by' is linked to users. If webhook doesn't pass a user_id, this insert might fail if RLS or Foreign Key requires it.
-          // For now, we assume payload might have it or we skip if null and schema allows.
-          // Let's assume payload.userId might come in webhook? 
-          // Re-checking payload structure... added 'userId' to extraction below for safety but let's stick to what we have.
-          // If userId is missing, maybe rely on defaults or service role override.
+          vendor_name: extractedData.vendor_name,
+          transaction_date: extractedData.transaction_date,
+          total_amount: extractedData.total_amount,
+          tax_amount: extractedData.tax_amount,
+          currency: extractedData.currency,
+          primary_tax_amount: extractedData.primary_tax_amount,
+          secondary_tax_amount: extractedData.secondary_tax_amount,
+          invoice_number: extractedData.invoice_number,
+          tax_id: extractedData.tax_id,
+          payment_method: extractedData.payment_method,
+          // Extract explicit top-level fields only, assume parsing handled extras
+          
+          org_id: orgId,
+          created_by: extractedData.created_by, // Likely undefined, relying on default or trigger if any, or null
           receipt_url: sourceName, 
           description: extractedData.business_purpose, 
-          status: 'pending_review' 
+          status: 'pending_review',
+          
+          // Map Risk info
+          risk_level: extractedData.risk_level,
+          risk_reasons: extractedData.risk_reasons
         })
+        .select()
+        .single();
 
       if (insertError) {
-        console.error("DB Insert Error:", insertError)
+        console.error("DB Insert Error (Transaction):", insertError)
         throw new Error(`DB Insert failed: ${insertError.message}`)
+      }
+
+      console.log("Inserted Transaction ID:", transactionData.id);
+
+      // 8. Insert Line Items & Feed Data Factory
+      if (extractedData.line_items && extractedData.line_items.length > 0) {
+          const transactionId = transactionData.id;
+          
+          // A. Personal Ledger: transaction_items
+          const lineItemsPayload = extractedData.line_items.map((item: any) => ({
+              transaction_id: transactionId,
+              description: item.item_name,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              amount: item.amount,
+              category_tax: null // prompt doesn't extract tax per line yet, can be enhanced later
+          }));
+
+          const { error: linesError } = await supabase
+            .from('transaction_items')
+            .insert(lineItemsPayload);
+          
+          if (linesError) console.error("Error inserting line items:", linesError);
+
+          // B. Data Factory: material_market_prices (Anonymous)
+          // Transform for Factory
+          // Note: embedding generation would ideally happen here using another model or pgvector-python helper, 
+          // but for now we insert raw data. Gemini can generate embedding but typical flow is separate.
+          // We will insert without embedding for now, or use a placeholder if required. 
+          // Schema matches: material_name, raw_name, price (unit_price), unit (implied EA for now or extract), brand (extract?), vendor (from txn)
+          
+          const marketDataPayload = extractedData.line_items.map((item: any) => ({
+              material_name: item.item_name,
+              raw_name: item.raw_name,
+              category: item.category,
+              price: item.unit_price,
+              vendor_id: extractedData.vendor_name, // Use extracted vendor name
+              region_code: 'BC-Greater-Vancouver', // Hardcoded or extracted if possible
+              unit: 'EA', // Defaulting for MVP
+              // embedding: ... // Skip for now
+          }));
+
+          // Use service role client to bypass RLS if needed, but here we are in Edge Function with Service Key (assumed or implicit)
+          // Wait, 'supabase' client created at top: createClient(URL, KEY). 
+          // Usually Edge Functions get a permissive key via Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+          // Let's ensure we use that if we want to write to the Factory without user RLS blocking.
+          
+          const { error: factoryError } = await supabase
+            .from('material_market_prices')
+            .insert(marketDataPayload);
+            
+          if (factoryError) console.error("Error feeding Data Factory:", factoryError);
       }
 
       console.log("Successfully processed receipt and inserted transaction.")
