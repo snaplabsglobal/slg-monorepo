@@ -9,13 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.970.0",
+    "@aws-sdk/s3-request-presigner": "^3.970.0",
+    "@slg/config": "workspace:*",
+    "@slg/core-logic": "workspace:*",
+    "@slg/ui-kit": "workspace:*",
     "next": "16.1.1",
     "next-pwa": "^5.6.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@slg/core-logic": "workspace:*",
-    "@slg/ui-kit": "workspace:*",
-    "@slg/config": "workspace:*"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
