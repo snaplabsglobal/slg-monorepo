@@ -1,163 +1,177 @@
-# SnapLabs Global - Frontend Monorepo
+# Supabase CLI
 
-**Brand Positioning**: Luxury SaaS · Premium Construction Tech · Apple-Grade Polish
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
-## Overview
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
-This monorepo contains the complete frontend ecosystem for SnapLabs Global:
+This repository contains all the functionality for Supabase CLI.
 
-- **SLG Portal** (`apps/slg-portal`) - Brand showcase website
-- **LedgerSnap** (`apps/ledgersnap`) - Mobile-first receipt management tool
-- **JobSite Snap** (`apps/jobsitesnap`) - Construction project management dashboard
-- **SnapUI** (`packages/snap-ui`) - Shared component library and design system
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
-## Tech Stack
+## Getting started
 
-- **Framework**: Next.js 14+ (App Router)
-- **Language**: TypeScript 5+
-- **Styling**: CSS Modules + CSS Variables
-- **Monorepo**: Turborepo
-- **Package Manager**: npm 9+
-- **Node**: 20+ LTS
+### Install the CLI
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20 or higher
-- npm 9 or higher
-
-### Installation
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
 ```bash
-# Install all dependencies
-npm install
+npm i supabase --save-dev
 ```
 
-### Development
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
+
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+
+<details>
+  <summary><b>macOS</b></summary>
+
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
 
 ```bash
-# Run all apps in development mode
-npm run dev
-
-# Run specific app
-npm run dev --filter=slg-portal
-npm run dev --filter=ledgersnap
-npm run dev --filter=jobsitesnap
+supabase bootstrap
 ```
 
-### Build
+Or using npx:
 
 ```bash
-# Build all apps
-npm run build
-
-# Build specific app
-npm run build --filter=slg-portal
+npx supabase bootstrap
 ```
 
-### Testing
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
 
-```bash
-# Run all tests
-npm run test
+## Docs
 
-# Run tests for specific package
-npm run test --filter=snap-ui
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+
+## Breaking changes
+
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+
+## Developing
+
+To run from source:
+
+```sh
+# Go >= 1.22
+go run . help
 ```
-
-### Code Quality
-
-```bash
-# Lint all code
-npm run lint
-
-# Format all code
-npm run format
-
-# Type check
-npm run type-check
-```
-
-## Project Structure
-
-```
-slo-monorepos/
-├── apps/
-│   ├── slg-portal/          # SLG - The Face
-│   ├── ledgersnap/          # LS - The Edge
-│   └── jobsitesnap/         # JSS - The Core
-├── packages/
-│   ├── snap-ui/             # Shared component library
-│   ├── snap-types/          # Shared TypeScript types
-│   └── snap-config/         # Shared configs
-├── tools/
-│   └── scripts/             # Build and deployment scripts
-├── turbo.json               # Turborepo configuration
-└── package.json             # Root package.json
-```
-
-## Design System
-
-All applications use the **SnapUI Design System v1.0**:
-
-- **Colors**: Graphite Black (#1A1A1B), Glacier White (#F5F5F7), Emerald Green (#00C805)
-- **Typography**: SF Pro (iOS), Inter (Android/Web)
-- **Spacing**: 8px grid system
-- **Components**: Atomic design methodology
-
-See `packages/snap-ui/README.md` for full design system documentation.
-
-## Development Guidelines
-
-### Code Style
-
-- **TypeScript**: Strict mode enabled
-- **Formatting**: Prettier with 80-character line limit
-- **Linting**: ESLint with recommended rules
-- **Naming**: PascalCase for components, camelCase for functions
-
-### Git Workflow
-
-```bash
-# Branch naming
-feature/camera-ux
-fix/receipt-upload
-hotfix/security-patch
-
-# Commit messages (Conventional Commits)
-feat: add camera capture functionality
-fix: resolve receipt upload timeout
-docs: update README
-```
-
-### Testing Standards
-
-- **Unit Tests**: Vitest
-- **Component Tests**: React Testing Library
-- **E2E Tests**: Playwright
-- **Coverage**: 80% minimum
-
-## Performance Targets
-
-| App | Lighthouse Score | Bundle Size (Gzipped) |
-|-----|------------------|----------------------|
-| SLG Portal | 95+ | < 300 KB |
-| LedgerSnap | 95+ | < 400 KB |
-| JobSite Snap | 95+ | < 500 KB |
-
-## Documentation
-
-- [Implementation Plan](/.gemini/antigravity/brain/754cbca8-262c-4a00-b209-63a412b7e128/implementation_plan.md)
-- [Design System Spec](/.gemini/antigravity/brain/754cbca8-262c-4a00-b209-63a412b7e128/design-system-spec.md)
-- [Visual Moodboard](/.gemini/antigravity/brain/754cbca8-262c-4a00-b209-63a412b7e128/moodboard.md)
-- [Camera UX Spec](/.gemini/antigravity/brain/754cbca8-262c-4a00-b209-63a412b7e128/camera-ux-spec.md)
-- [Clean Code Promise](/.gemini/antigravity/brain/754cbca8-262c-4a00-b209-63a412b7e128/clean-code-promise.md)
-
-## License
-
-Proprietary - SnapLabs Global © 2026
-
-## Contact
-
-For questions or support, contact the AG Development Team.
