@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useRef, useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { X, Camera, Zap, RefreshCw, ChevronDown, Building, Briefcase } from 'lucide-react';
+import { X, Camera, Zap, RefreshCw, ChevronDown, Building, Briefcase, Plus, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { usePathname } from 'next/navigation';
 
@@ -26,12 +26,18 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
     const [showNudge, setShowNudge] = useState(false);
     const [nudgeType, setNudgeType] = useState<'GAS_TO_GENERAL' | null>(null);
 
+    // Lightning Create State
+    const [showCreateInput, setShowCreateInput] = useState(false);
+    const [newProjectName, setNewProjectName] = useState('');
+    const [creatingProject, setCreatingProject] = useState(false);
+
     // 1. Context Awareness & Projects
     useEffect(() => {
         if (!isOpen) {
             setCameraActive(false);
             setCaptureState('idle');
             setShowNudge(false);
+            setShowCreateInput(false);
             return;
         }
 
@@ -71,8 +77,6 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
         setCaptureState('capturing');
 
         // SIMULATION: AI Nudge Logic
-        // In a real app, successful capture -> analysis -> nudge.
-        // Here we simulate: If Project is selected (not General), 20% chance to nudge "Looks like Gas".
         if (projectId !== 'GENERAL' && Math.random() > 0.7) {
             setTimeout(() => {
                 setNudgeType('GAS_TO_GENERAL');
@@ -83,19 +87,9 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
         }
 
         // Capture Simulation (Fire and Forget)
-        // In real app: canvas.toBlob() -> upload
         setTimeout(() => {
             setCaptureState('done');
-
-            // --- ASYNC UPLOAD LOGIC ---
-            // We act as if we uploaded. 
-            // Logic:
-            // if (projectId === 'GENERAL') -> is_overhead=true, project_id=null
-            // else -> project_id=uuid
-
             console.log(`[Captured] Project: ${projectId}`);
-
-            // Reset for next shot after brief animation
             setTimeout(() => {
                 setCaptureState('idle');
             }, 800);
@@ -105,17 +99,48 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
     const handleNudgeAction = (accept: boolean) => {
         setShowNudge(false);
         if (accept && nudgeType === 'GAS_TO_GENERAL') {
-            // Switch to General and proceed
             setProjectId('GENERAL');
-            // Proceed with capture
             setCaptureState('done');
             console.log("[Nudge Accepted] Switched to GENERAL");
             setTimeout(() => setCaptureState('idle'), 800);
         } else {
-            // Proceed as originally intended
             setCaptureState('done');
             setTimeout(() => setCaptureState('idle'), 800);
         }
+    };
+
+    const handleCreateProject = async () => {
+        if (!newProjectName.trim()) return;
+        setCreatingProject(true);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        // Get org id (hacky for mvp)
+        const { data: members } = await supabase.from('organization_members').select('organization_id').eq('user_id', user?.id).limit(1).single();
+        const orgId = members?.organization_id;
+
+        if (!orgId) {
+            alert("Could not determine organization.");
+            setCreatingProject(false);
+            return;
+        }
+
+        const { data, error } = await supabase.from('projects').insert({
+            name: newProjectName,
+            organization_id: orgId,
+            status: 'Active',
+            is_incomplete: true // Technical debt flag
+        }).select().single();
+
+        if (data) {
+            // Success
+            setProjects(prev => [{ project_id: data.id, project_name: data.name }, ...prev]);
+            setProjectId(data.id);
+            setNewProjectName('');
+            setShowCreateInput(false);
+        } else {
+            alert('Failed to create project.');
+        }
+        setCreatingProject(false);
     };
 
     return (
@@ -149,20 +174,29 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
                                 {/* Top Controls */}
                                 <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-start bg-gradient-to-b from-black/50 to-transparent pt-12">
 
-                                    {/* TOP LEFT SELECTOR */}
-                                    <div className="relative">
-                                        <select
-                                            value={projectId}
-                                            onChange={(e) => setProjectId(e.target.value)}
-                                            className="appearance-none bg-black/50 text-white border border-white/20 rounded-full px-4 py-2 pr-8 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-md"
+                                    {/* TOP LEFT SELECTOR + LIGHTNING CREATE */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative">
+                                            <select
+                                                value={projectId}
+                                                onChange={(e) => setProjectId(e.target.value)}
+                                                className="appearance-none bg-black/50 text-white border border-white/20 rounded-full px-4 py-2 pr-8 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-md max-w-[200px]"
+                                            >
+                                                <option value="GENERAL">🏢 Office / General</option>
+                                                <option disabled>──────────</option>
+                                                {projects.map(p => (
+                                                    <option key={p.project_id} value={p.project_id}>🏗️ {p.project_name}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-white/50 pointer-events-none" />
+                                        </div>
+
+                                        <button
+                                            onClick={() => setShowCreateInput(prev => !prev)}
+                                            className={`p-2 rounded-full backdrop-blur transition-colors ${showCreateInput ? 'bg-white text-black' : 'bg-black/30 text-white'}`}
                                         >
-                                            <option value="GENERAL">🏢 Office / General</option>
-                                            <option disabled>──────────</option>
-                                            {projects.map(p => (
-                                                <option key={p.project_id} value={p.project_id}>🏗️ {p.project_name}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-white/50 pointer-events-none" />
+                                            <Plus className="w-5 h-5" />
+                                        </button>
                                     </div>
 
                                     <div className="flex gap-4">
@@ -175,15 +209,36 @@ export default function CameraModal({ isOpen, onClose, preselectedProjectId }: C
                                     </div>
                                 </div>
 
+                                {/* LIGHTNING CREATE INPUT OVERLAY */}
+                                {showCreateInput && (
+                                    <div className="absolute top-28 left-4 right-4 z-30 bg-black/80 backdrop-blur-md p-4 rounded-xl border border-white/10 animate-fade-in-down">
+                                        <h3 className="text-white text-sm font-bold mb-2">⚡ Lightning Create</h3>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={newProjectName}
+                                                onChange={e => setNewProjectName(e.target.value)}
+                                                placeholder="New Project Name..."
+                                                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                            <button
+                                                onClick={handleCreateProject}
+                                                disabled={creatingProject || !newProjectName.trim()}
+                                                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold disabled:opacity-50 flex items-center justify-center min-w-[60px]"
+                                            >
+                                                {creatingProject ? <Loader2 className="animate-spin w-4 h-4" /> : 'Go'}
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 mt-2">* Address can be added later from Home.</p>
+                                    </div>
+                                )}
+
                                 {/* Main Viewfinder */}
                                 <div className="flex-1 relative bg-gray-900 flex items-center justify-center overflow-hidden">
                                     {/* Mock Camera Feed */}
                                     {cameraActive && (
-                                        <div className="w-full h-full bg-gray-800 relative">
-                                            {/* Image Placeholder or Video Element */}
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <span className="text-gray-600 font-mono text-xs">CAMERA FEED SIMULATION</span>
-                                            </div>
+                                        <div className="w-full h-full bg-gray-800 relative bg-[url('https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2670&auto=format&fit=crop')] bg-cover bg-center opacity-80">
 
                                             {/* AI Nudge Popup */}
                                             {showNudge && (
