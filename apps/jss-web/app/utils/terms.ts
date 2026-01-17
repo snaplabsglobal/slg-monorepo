@@ -4,7 +4,8 @@ export type TermKey =
   | 'TIMECARD'
   | 'RECEIPT'
   | 'CLIENT'
-  | 'SUB_CONTRACTOR';
+  | 'SUB_CONTRACTOR'
+  | 'SERVICE_CALL';
 
 export const DEFAULT_TERMS: Record<TermKey, string> = {
   PROJECT: 'Project',
@@ -12,7 +13,8 @@ export const DEFAULT_TERMS: Record<TermKey, string> = {
   TIMECARD: 'Timecard',
   RECEIPT: 'Receipt',
   CLIENT: 'Client',
-  SUB_CONTRACTOR: 'Subcontractor'
+  SUB_CONTRACTOR: 'Subcontractor',
+  SERVICE_CALL: 'Service Call'
 };
 
 export const LEGAL_TERMS: Record<TermKey, string> = {
@@ -21,7 +23,8 @@ export const LEGAL_TERMS: Record<TermKey, string> = {
   TIMECARD: 'Billable Hours',
   RECEIPT: 'Expense',
   CLIENT: 'Client',
-  SUB_CONTRACTOR: 'Co-Counsel'
+  SUB_CONTRACTOR: 'Co-Counsel',
+  SERVICE_CALL: 'Consultation'
 };
 
 /**
