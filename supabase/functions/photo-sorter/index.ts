@@ -68,22 +68,31 @@ Deno.serve(async (req) => {
 
     // 4. Routing Logic ("The Sorter")
     if (data.type === 'RECEIPT') {
-        // Forward to Receipt Processor (or insert simple transaction for now)
-        // Ideally we invoke the receipt-processor function, but for now let's just mark it.
-        // Or we can invoke the receipt-processor? 
-        // Let's insert into transactions as DRAFT with the image, so processor can pick it up or user can verify.
-        // Actually, user instruction says "classify... then store".
-        // Let's call receipt-processor logic? Or just insert into transactions?
-        // Let's insert into transactions with status='pending' and type='expense'.
-        // Wait, receipt-processor extracts amounts. Sorter just sorts.
-        // If it's a receipt, we should probably trigger extraction.
-        // For MVP speed: Insert into 'transactions' with minimal info, let a trigger or another func handle extraction?
-        // OR: Just return the type to frontend? No, async upload.
-        // Let's Insert into 'transactions' as a placeholder.
         
+        const isGeneral = project_id === 'GENERAL';
+        // If GENERAL, use user's org (fetch org_id from user profile or via RPC, here we simplify)
+        // Ideally we need org_id. If project is GENERAL, we might not have a simple way to get org_id without a project.
+        // Assuming user belongs to one boolean org or we look up from a default project or user.
+        // For MVP: Let's assume we can get org_id from the user (if we had auth context fully) or just nullable.
+        
+        let targetProjectId = isGeneral ? null : project_id;
+        let isOverhead = isGeneral;
+        
+        let orgId = null;
+        if (!isGeneral) {
+             const { data: proj } = await supabase.from('projects').select('organization_id').eq('id', project_id).single();
+             orgId = proj?.organization_id;
+        } else {
+             // Fallback: Try to find any project for this user to get Org ID, or use a 'default' org.
+             // This is a common issue with "General". Let's assume the user context has it, or we rely on RLS default?
+             // Or we just query ANY project the user is in.
+             const { data: members } = await supabase.from('organization_members').select('organization_id').eq('user_id', user_id).limit(1).single();
+             orgId = members?.organization_id;
+        }
+
         await supabase.from('transactions').insert({
-            project_id: project_id,
-            org_id: (await supabase.from('projects').select('organization_id').eq('id', project_id).single()).data?.organization_id,
+            project_id: targetProjectId,
+            org_id: orgId,
             user_id: user_id,
             transaction_date: new Date().toISOString(),
             vendor_name: "Pending AI Extraction",
@@ -91,6 +100,7 @@ Deno.serve(async (req) => {
             attachment_url: image_url,
             status: 'draft',
             description: data.description,
+            is_overhead: isOverhead, // <--- NEW IS_OVERHEAD FLAG
             metadata: { ai_tags: data.tags, sorted_by: 'photo-sorter' }
         });
 
