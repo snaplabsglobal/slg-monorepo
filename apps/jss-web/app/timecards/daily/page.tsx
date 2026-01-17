@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { Plus, Trash2, Clock, MapPin, Loader2, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getTerm } from '@/utils/terms';
 
 type TimeSession = {
     id: string; // temp id
@@ -212,7 +213,7 @@ export default function DailyTimesheetPage() {
                     onClick={addSession}
                     className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 font-medium hover:border-blue-500 hover:text-blue-500 transition-colors flex items-center justify-center gap-2"
                 >
-                    <Plus className="w-5 h-5" /> Add Site / Session
+                    <Plus className="w-5 h-5" /> Add {getTerm('SITE')} / Session
                 </button>
             </div>
 

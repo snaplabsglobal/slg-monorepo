@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Building2, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
+import { getTerm, getTermPlural } from '@/utils/terms';
 
 export default async function ProjectsDashboard() {
     const supabase = createClient();
@@ -28,14 +29,14 @@ export default async function ProjectsDashboard() {
 
                 <div className="flex justify-between items-center">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">{getTermPlural('PROJECT')}</h1>
                         <p className="text-gray-500 mt-1">Your construction command center.</p>
                     </div>
                     <Link
                         href="/projects/new"
                         className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                     >
-                        + New Project
+                        + New {getTerm('PROJECT')}
                     </Link>
                 </div>
 
