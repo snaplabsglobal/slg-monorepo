@@ -49,6 +49,31 @@ serve(async (req) => {
          throw new Error("Unknown payload type. Expected 'WEBHOOK' or Storage 'INSERT' event.");
       }
 
+      // 2a. Magic Link: GPS Project Matching
+      let projectId = null;
+      let matchMethod = 'MANUAL';
+      // Expect payload to carry gps info if available
+      const gpsLat = payload.gps_lat || (payload.metadata?.gps_lat); 
+      const gpsLong = payload.gps_long || (payload.metadata?.gps_long);
+
+      if (gpsLat && gpsLong && orgId) {
+          console.log(`Checking GPS Match: ${gpsLat}, ${gpsLong}`);
+          const { data: matchedPid, error: gpsError } = await supabase
+              .rpc('get_project_by_gps', { 
+                  p_lat: gpsLat, 
+                  p_long: gpsLong, 
+                  p_org_id: orgId 
+              });
+          
+          if (matchedPid) {
+              projectId = matchedPid;
+              matchMethod = 'GPS_AUTO'; // The Magic Link
+              console.log("Magic Link Found Project:", projectId);
+          } else if (gpsError) {
+              console.error("GPS RPC Error:", gpsError);
+          }
+      }
+
       // 3. Initialize Gemini
       const apiKey = Deno.env.get('GEMINI_API_KEY')
       if (!apiKey) throw new Error("GEMINI_API_KEY is not set")
@@ -151,7 +176,12 @@ Return ONLY a valid JSON object:
           
           // Map Risk info
           risk_level: extractedData.risk_level,
-          risk_reasons: extractedData.risk_reasons
+          risk_reasons: extractedData.risk_reasons,
+          
+          // Project Awareness Fields
+          project_id: projectId,
+          project_match_method: matchMethod,
+          gps_coordinates: (gpsLat && gpsLong) ? `POINT(${gpsLong} ${gpsLat})` : null
         })
         .select()
         .single();
