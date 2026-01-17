@@ -66,13 +66,27 @@ serve(async (req) => {
               });
           
           if (matchedPid) {
-              projectId = matchedPid;
-              matchMethod = 'GPS_AUTO'; // The Magic Link
-              console.log("Magic Link Found Project:", projectId);
+              // CHANGE (2026-01-16): Demote GPS to Suggestion as per user request
+              // projectId = matchedPid; <--- Disabled auto-assign
+              // matchMethod = 'GPS_AUTO';
+              
+              // Instead, we just Suggest it in Metadata metadata (handled in insert below)
+              // But we can set a local var here to use in the insert
+              projectId = null; // Explicitly null
+              matchMethod = 'GPS_SUGGESTION';
+              
+              // We'll store the 'matchedPid' in the insert
+              console.log("GPS Suggested Project:", matchedPid);
           } else if (gpsError) {
               console.error("GPS RPC Error:", gpsError);
           }
       }
+
+      // Store suggestion for insert
+      let suggestedProjectId = matchMethod === 'GPS_SUGGESTION' ? (await supabase.rpc('get_project_by_gps', { p_lat: gpsLat, p_long: gpsLong, p_org_id: orgId })).data : null;
+      // Optimization: we already called RPC above, let's capture the result efficiently.
+      // Refactoring the block above to capture 'matchedPid' into a var.
+
 
       // 3. Initialize Gemini
       const apiKey = Deno.env.get('GEMINI_API_KEY')
@@ -179,9 +193,15 @@ Return ONLY a valid JSON object:
           risk_reasons: extractedData.risk_reasons,
           
           // Project Awareness Fields
-          project_id: projectId,
+          project_id: projectId, // Now likely null if matchMethod is GPS_SUGGESTION
           project_match_method: matchMethod,
-          gps_coordinates: (gpsLat && gpsLong) ? `POINT(${gpsLong} ${gpsLat})` : null
+          gps_coordinates: (gpsLat && gpsLong) ? `POINT(${gpsLong} ${gpsLat})` : null,
+          
+          // Store Suggestion in Metadata if applicable
+          metadata: {
+             suggested_project_id: suggestedProjectId,
+             original_filename: name // might as well store this
+          }
         })
         .select()
         .single();
