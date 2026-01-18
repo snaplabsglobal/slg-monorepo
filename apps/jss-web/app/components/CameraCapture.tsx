@@ -1,14 +1,26 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { Search, Package } from 'lucide-react';
 import styles from './CameraCapture.module.css';
 
 export const CameraCapture = ({ jobId }: { jobId?: string }) => {
+    const supabase = createClient();
+    const [mode, setMode] = useState<'scan' | 'warehouse'>('scan');
+    const [warehouseSearch, setWarehouseSearch] = useState('');
+    const [suggestedPrice, setSuggestedPrice] = useState<number | null>(null);
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [isCapturing, setIsCapturing] = useState(false);
     const [error, setError] = useState<string>('');
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+
+    const checkStockPrice = async (term: string) => {
+        if (term.length < 3) return;
+        const { data, error } = await supabase.rpc('fn_suggest_stock_price', { search_term: term });
+        if (data) setSuggestedPrice(data);
+    };
 
     const requestCameraPermission = async () => {
         try {
@@ -108,7 +120,50 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
     return (
         <div className={styles.container}>
             {!isCapturing ? (
-                <div className={styles.prompt}>
+                <div className="flex bg-gray-100 p-1 rounded-lg mb-4 w-full max-w-xs mx-auto">
+                    <button
+                        className={`flex-1 py-1 rounded-md text-sm font-medium transition-all ${mode === 'scan' ? 'bg-white shadow text-black' : 'text-gray-500'}`}
+                        onClick={() => setMode('scan')}
+                    >
+                        📸 Receipt Scan
+                    </button>
+                    <button
+                        className={`flex-1 py-1 rounded-md text-sm font-medium transition-all ${mode === 'warehouse' ? 'bg-white shadow text-black' : 'text-gray-500'}`}
+                        onClick={() => setMode('warehouse')}
+                    >
+                        📦 Warehouse Out
+                    </button>
+                </div>
+
+                    {mode === 'warehouse' ? (
+                <div className="w-full max-w-xs mx-auto bg-white p-4 rounded-xl shadow-sm text-left">
+                    <label className="block text-xs font-bold text-gray-500 mb-1">ITEM NAME</label>
+                    <div className="relative mb-3">
+                        <input
+                            type="text"
+                            className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-black outline-none py-1 pr-8"
+                            placeholder="e.g. Drywall Screw"
+                            value={warehouseSearch}
+                            onChange={(e) => setWarehouseSearch(e.target.value)}
+                            onBlur={() => checkStockPrice(warehouseSearch)}
+                        />
+                        <Search className="w-5 h-5 text-gray-400 absolute right-0 top-2" />
+                    </div>
+
+                    {suggestedPrice !== null && (
+                        <div className="bg-blue-50 p-3 rounded-lg flex justify-between items-center mb-4">
+                            <span className="text-xs text-blue-600 font-bold">Suggested Cost</span>
+                            <span className="font-mono font-bold text-blue-800">${suggestedPrice.toFixed(2)} / ea</span>
+                        </div>
+                    )}
+
+                    <button className="w-full bg-black text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+                        <Package className="w-5 h-5" />
+                        Confirm Stock Output
+                    </button>
+                </div>
+            ) : (
+                <>
                     <div className={styles.icon}>📸</div>
                     <h2 className={styles.title}>拍摄收据</h2>
                     <p className={styles.subtitle}>
@@ -131,41 +186,44 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
                             {error}
                         </div>
                     )}
-                </div>
-            ) : (
-                <div className={styles.cameraView}>
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        className={styles.video}
-                    />
-
-                    <div className={styles.controls}>
-                        <button
-                            onClick={stopCamera}
-                            className={styles.cancelButton}
-                        >
-                            取消 Cancel
-                        </button>
-
-                        <button
-                            onClick={capturePhoto}
-                            className={styles.captureButton}
-                        >
-                            <div className={styles.captureRing}>
-                                <div className={styles.captureInner} />
-                            </div>
-                        </button>
-
-                        <div className={styles.placeholder} />
-                    </div>
-
-                    <div className={styles.hint}>
-                        对准收据，确保文字清晰可见 (1x)
-                    </div>
-                </div>
+                </>
             )}
         </div>
+    ) : (
+        <div className={styles.cameraView}>
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className={styles.video}
+            />
+
+            <div className={styles.controls}>
+                <button
+                    onClick={stopCamera}
+                    className={styles.cancelButton}
+                >
+                    取消 Cancel
+                </button>
+
+                <button
+                    onClick={capturePhoto}
+                    className={styles.captureButton}
+                >
+                    <div className={styles.captureRing}>
+                        <div className={styles.captureInner} />
+                    </div>
+                </button>
+
+                <div className={styles.placeholder} />
+            </div>
+
+            <div className={styles.hint}>
+                对准收据，确保文字清晰可见 (1x)
+            </div>
+        </div>
+    )
+}
+        </div >
     );
 };
