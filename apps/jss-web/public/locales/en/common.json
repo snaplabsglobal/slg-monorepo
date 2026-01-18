@@ -1,0 +1,14 @@
+{
+    "change_order": "Change Order",
+    "dashboard": "Dashboard",
+    "projects": "Projects",
+    "settings": "Settings",
+    "sign_out": "Sign Out",
+    "welcome": "Welcome back",
+    "cost_impact": "Cost Impact",
+    "time_impact": "Time Impact",
+    "approved": "Approved",
+    "draft": "Draft",
+    "client_signature": "Client Signature",
+    "legal_disclaimer": "This document is legally binding. By signing, you agree to the scope changes and associated costs."
+}

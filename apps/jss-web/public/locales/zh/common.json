@@ -1,0 +1,14 @@
+{
+    "change_order": "变更签证单",
+    "dashboard": "仪表盘",
+    "projects": "项目列表",
+    "settings": "设置",
+    "sign_out": "退出登录",
+    "welcome": "欢迎回来",
+    "cost_impact": "造价变动",
+    "time_impact": "工期变动",
+    "approved": "已批准",
+    "draft": "草稿",
+    "client_signature": "客户签名",
+    "legal_disclaimer": "本文件具有法律约束力。签署即表示您同意变更范围及相关费用。"
+}
