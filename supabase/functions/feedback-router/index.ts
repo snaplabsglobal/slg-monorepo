@@ -31,16 +31,18 @@ serve(async (req) => {
     let transcript = message || "";
     let sentimentScore = 5;
     let isUrgent = false;
+    let tags = [];
 
     if (audio_base64) {
-         // Multimodal Prompt: Transcribe + Analyze
+         // Multimodal Prompt: Transcribe + Analyze + Tag
          const prompt = `
              You are a customer support AI.
              1. Transcribe the audio exactly (it may be English, Mandarin, or Cantonese).
              2. Analyze the sentiment (1 = Happy, 10 = Furious/Rage).
              3. Flag 'urgent' if user is clearly angry, shouting, or reporting a breakage.
+             4. Extract TAGS based on content, e.g. ["#UI", "#Bug", "#Feature", "#Account"].
              
-             Return ONLY JSON: { "transcription": "...", "sentiment": number, "is_urgent": boolean }
+             Return ONLY JSON: { "transcription": "...", "sentiment": number, "is_urgent": boolean, "tags": string[] }
          `;
          
          const result = await model.generateContent([
@@ -52,17 +54,20 @@ serve(async (req) => {
          transcript = analysis.transcription;
          sentimentScore = analysis.sentiment;
          isUrgent = analysis.is_urgent;
+         tags = analysis.tags || [];
     } else {
          // Text Analysis
          const prompt = `
              Analyze this user feedback: "${transcript}"
              Determine sentiment (1=Happy, 10=Furious) and urgency.
-             Return ONLY JSON: { "sentiment": number, "is_urgent": boolean }
+             Extract TAGS (e.g. ["#UI", "#Bug", "#Feature"]).
+             Return ONLY JSON: { "sentiment": number, "is_urgent": boolean, "tags": string[] }
          `;
          const result = await model.generateContent(prompt);
          const analysis = JSON.parse(result.response.text().replace(/```json/g, '').replace(/```/g, '').trim());
          sentimentScore = analysis.sentiment;
          isUrgent = analysis.is_urgent;
+         tags = analysis.tags || [];
     }
 
     // 2. Generate Reply
@@ -87,6 +92,7 @@ serve(async (req) => {
         transcription: transcript, // Or transcription
         sentiment_score: sentimentScore,
         is_urgent: isUrgent,
+        tags: tags,
         ai_response: aiReply,
         status: 'new'
     }).select().single();
