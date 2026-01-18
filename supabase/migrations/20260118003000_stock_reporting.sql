@@ -66,6 +66,7 @@ FOR EACH ROW
 EXECUTE FUNCTION public.fn_seed_industry_presets();
 
 -- 4. Update Financial View (Cash vs Stock)
+DROP VIEW IF EXISTS view_project_financial_summary CASCADE;
 CREATE OR REPLACE VIEW view_project_financial_summary AS
 WITH budget_agg AS (
     SELECT 

@@ -1,0 +1,87 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  # Step 1: Code Audit (Lint & Test)
+  audit:
+    name: Code Audit (Lint & Test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm run lint
+      - name: Test
+        run: pnpm run test
+
+  # Step 2: Database Sync (Dev)
+  sync-dev:
+    name: Sync Dev DB
+    needs: audit
+    if: github.ref == 'refs/heads/dev' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link and Push to Dev DB
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID_DEV }}
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
+        run: |
+          supabase link --project-ref $PROJECT_ID --password $DB_PASSWORD
+          supabase db push
+
+  # Step 3: Production Deployment (Sync DB -> Vercel)
+  deploy-prod:
+    name: Deploy Production
+    needs: audit
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # 3.1: Sync Production DB
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link and Push to Custom Prod DB
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID_PROD }}
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+        run: |
+          supabase link --project-ref $PROJECT_ID --password $DB_PASSWORD
+          supabase db push
+
+      # 3.2: Deploy to Vercel (Circuit Breaker: Only runs if DB sync succeeds)
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          
+      # 3.3: Post-Deployment Check
+      - name: Deployment Status Report
+        if: success()
+        run: echo "::notice::System Power On! Production Environment is Live and Synced."

@@ -3,6 +3,7 @@ ALTER TABLE "public"."profiles"
 ADD COLUMN IF NOT EXISTS "hourly_wage" numeric(10,2) DEFAULT 30.00;
 
 -- [2] Update Financial View (The "Truth" Source)
+DROP VIEW IF EXISTS view_project_financial_summary CASCADE;
 CREATE OR REPLACE VIEW view_project_financial_summary AS
 WITH budget_agg AS (
     -- Sum of all 'Marked as Sold' estimates

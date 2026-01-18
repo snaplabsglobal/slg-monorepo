@@ -1,4 +1,6 @@
 -- 1. Measurements (The "Source of Truth" for Quantities)
+SELECT 'DEBUG: Applying 20260117220000_detailed_estimation_engine.sql' as msg;
+
 CREATE TABLE IF NOT EXISTS "public"."measurements" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "project_id" "uuid" NOT NULL REFERENCES "public"."projects"("id") ON DELETE CASCADE,
@@ -12,15 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."measurements" (
     PRIMARY KEY ("id")
 );
 
--- 2. Assemblies (Bundles of Logic)
-CREATE TABLE IF NOT EXISTS "public"."assemblies" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "organization_id" "uuid" REFERENCES "public"."organizations"("id") ON DELETE CASCADE,
-    "name" "text" NOT NULL, -- e.g. "Standard Bathroom Renovation"
-    "logic_config" "jsonb" NOT NULL DEFAULT '{}'::jsonb, -- e.g. { "drywall": "perimeter * height", "paint": "area" }
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    PRIMARY KEY ("id")
-);
+-- Note: Assemblies table defined in 20260117161000_assemblies_logic.sql. Do not recreate here.
 
 -- 3. Update Estimate Items (Link to Reality)
 ALTER TABLE "public"."estimate_items"
@@ -36,8 +30,8 @@ ADD COLUMN IF NOT EXISTS "is_deduction" boolean DEFAULT false;
 
 -- 5. RLS
 ALTER TABLE "public"."measurements" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."assemblies" ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Org members can view measurements" ON "public"."measurements";
 CREATE POLICY "Org members can view measurements" ON "public"."measurements"
 FOR ALL TO authenticated
 USING (
@@ -45,16 +39,6 @@ USING (
         SELECT 1 FROM projects
         JOIN organization_members ON projects.organization_id = organization_members.organization_id
         WHERE projects.id = measurements.project_id
-        AND organization_members.user_id = auth.uid()
-    )
-);
-
-CREATE POLICY "Org members can view assemblies" ON "public"."assemblies"
-FOR ALL TO authenticated
-USING (
-    EXISTS (
-        SELECT 1 FROM organization_members 
-        WHERE organization_members.organization_id = assemblies.organization_id 
         AND organization_members.user_id = auth.uid()
     )
 );
@@ -72,8 +56,6 @@ BEGIN
         WHEN calc_formula = 'wall_area' THEN (NEW.perimeter_ft * NEW.wall_height_ft)
         ELSE quantity -- No formula, keep manual
     END,
-    -- Recalculate Total Price (Stored Column usually handles this, but if derived, we just notify)
-    -- Our generated column "total_price" depends on "quantity", so updating "quantity" is enough!
     updated_at = NOW()
     WHERE reference_measurement_id = NEW.id;
 
@@ -81,6 +63,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS tr_measurements_update_quantities ON public.measurements;
 CREATE TRIGGER tr_measurements_update_quantities
 AFTER UPDATE ON public.measurements
 FOR EACH ROW

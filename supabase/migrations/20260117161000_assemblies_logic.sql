@@ -28,6 +28,7 @@ ALTER TABLE "public"."assembly_items" ADD COLUMN IF NOT EXISTS "csi_code" "text"
 ALTER TABLE "public"."assemblies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."assembly_items" ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Org members can view assemblies" ON "public"."assemblies";
 CREATE POLICY "Org members can view assemblies" ON "public"."assemblies"
 FOR ALL TO authenticated
 USING (
@@ -38,6 +39,7 @@ USING (
     )
 );
 
+DROP POLICY IF EXISTS "Org members can view assembly items" ON "public"."assembly_items";
 CREATE POLICY "Org members can view assembly items" ON "public"."assembly_items"
 FOR ALL TO authenticated
 USING (

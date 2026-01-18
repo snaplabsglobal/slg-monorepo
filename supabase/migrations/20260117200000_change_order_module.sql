@@ -3,6 +3,7 @@ ALTER TABLE "public"."change_orders"
 ADD COLUMN IF NOT EXISTS "impact_days" integer DEFAULT 0;
 
 -- [2] Update Financial View to include Approved COs
+DROP VIEW IF EXISTS view_project_financial_summary CASCADE;
 CREATE OR REPLACE VIEW view_project_financial_summary AS
 WITH budget_agg AS (
     -- Sum of all 'Marked as Sold' estimates
@@ -18,7 +19,7 @@ change_order_agg AS (
     -- Sum of Approved Change Orders
     SELECT 
         co.project_id,
-        SUM(co.amount_change) as total_change_order_cost,
+        SUM(co.amount) as total_change_order_cost,
         SUM(co.impact_days) as total_delay_days
     FROM public.change_orders co
     WHERE co.status = 'approved'

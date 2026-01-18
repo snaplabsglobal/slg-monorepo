@@ -34,23 +34,23 @@ WITH actuals AS (
     -- Based on user request, let's assume 'category' exists or map 'cost_code'.
     SELECT 
         project_id,
-        category, 
+        category_user as category, 
         SUM(total_amount) as total_actual_cost
     FROM transactions
     WHERE direction = 'expense' AND status != 'void'
-    GROUP BY project_id, category
+    GROUP BY project_id, category_user
 ),
 estimates AS (
     -- Sum quantities and estimated costs by Project and Category
     SELECT 
         e.project_id,
-        ei.category,
+        ei.cost_type as category,
         SUM(ei.quantity) as total_estimated_qty,
-        SUM(ei.calculated_total) as total_estimated_cost
+        SUM(ei.total_price) as total_estimated_cost
     FROM estimates e
     JOIN estimate_items ei ON e.id = ei.estimate_id
     WHERE e.status = 'Marked as Sold' -- Only count sold estimates
-    GROUP BY e.project_id, ei.category
+    GROUP BY e.project_id, ei.cost_type
 )
 SELECT 
     e.project_id,
