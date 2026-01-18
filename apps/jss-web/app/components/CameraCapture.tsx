@@ -113,30 +113,48 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
             const filename = `receipt_${Date.now()}.jpg`;
 
             try {
-                // 2. Get Signed URL
-                console.log('Requesting Signed URL...');
-                const { data: signData, error: signError } = await supabase.functions.invoke('upload-signer', {
-                    body: { filename, contentType: 'image/jpeg' }
-                });
+                const useR2 = process.env.NEXT_PUBLIC_USE_R2 === 'true';
+                let publicUrl = '';
 
-                if (signError) throw signError;
-                if (!signData?.uploadUrl) throw new Error('No upload URL returned');
+                if (useR2) {
+                    // 2. R2 Direct Upload
+                    console.log('Requesting Signed URL (R2 Mode)...');
+                    const { data: signData, error: signError } = await supabase.functions.invoke('upload-signer', {
+                        body: { filename, contentType: 'image/jpeg' }
+                    });
 
-                console.log('Uploading to R2...', signData.uploadUrl);
+                    if (signError) throw signError;
+                    if (!signData?.uploadUrl) throw new Error('No upload URL returned');
 
-                // 3. Upload to R2
-                const uploadRes = await fetch(signData.uploadUrl, {
-                    method: 'PUT',
-                    body: blob,
-                    headers: { 'Content-Type': 'image/jpeg' }
-                });
+                    console.log('Uploading to R2...', signData.uploadUrl);
 
-                if (!uploadRes.ok) throw new Error('Failed to upload to R2');
+                    const uploadRes = await fetch(signData.uploadUrl, {
+                        method: 'PUT',
+                        body: blob,
+                        headers: { 'Content-Type': 'image/jpeg' }
+                    });
 
-                const publicUrl = signData.publicUrl;
+                    if (!uploadRes.ok) throw new Error('Failed to upload to R2');
+                    publicUrl = signData.publicUrl;
+                } else {
+                    // 2. Fallback: Supabase Storage Upload
+                    console.log('Uploading to Supabase Storage (Legacy Mode)...');
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('receipts')
+                        .upload(`${(await supabase.auth.getUser()).data.user?.id}/${filename}`, blob, {
+                            contentType: 'image/jpeg',
+                            upsert: false
+                        });
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: publicUrlData } = supabase.storage.from('receipts').getPublicUrl(uploadData.path);
+                    publicUrl = publicUrlData.publicUrl;
+                }
+
                 console.log('Upload Success:', publicUrl);
 
-                // 4. Save to Database (Transaction Stub)
+                // 3. Save to Database (Transaction Stub)
                 const { error: dbError } = await supabase.from('transactions').insert({
                     description: 'Pending Receipt Processing...',
                     transaction_date: new Date().toISOString(),
@@ -144,7 +162,6 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
                     status: 'pending',
                     receipt_url: publicUrl,
                     org_id: (await supabase.auth.getUser()).data.user?.id // Temporary: Use proper org logic if available
-                    // logic usually requires profile join, but for test:
                 }).select();
 
                 if (dbError) console.error('DB Insert Error:', dbError);
