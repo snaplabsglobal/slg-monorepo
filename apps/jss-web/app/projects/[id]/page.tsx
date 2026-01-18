@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import FinancialExecutionBoard from '@/app/components/dashboard/FinancialExecutionBoard';
 import ChangeOrderSection from '@/app/components/projects/ChangeOrderSection';
+import AddStockWrapper from '@/app/components/projects/AddStockWrapper';
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
     const supabase = createClient();
@@ -46,6 +47,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                             </span>
                         </div>
                     </div>
+
+                    {/* Stock Quick Add */}
+                    <AddStockWrapper projectId={id} />
                 </div>
             </header>
 
@@ -85,6 +89,6 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     </div>
                 </div>
             </main>
-        </div>
+        </div >
     );
 }
