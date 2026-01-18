@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import FinancialExecutionBoard from '@/app/components/dashboard/FinancialExecutionBoard';
+import ChangeOrderSection from '@/app/components/projects/ChangeOrderSection';
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
     const supabase = createClient();
@@ -71,7 +72,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 {/* 2. Financial Execution Board (Real-Time) */}
                 <FinancialExecutionBoard projectId={id} />
 
-                {/* 3. Recent Activity / Tabs Placeholder */}
+                {/* 3. Change Orders Section */}
+                <ChangeOrderSection projectId={id} />
+
+                {/* 4. Recent Activity / Tabs Placeholder */}
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                     <div className="border-b px-6 py-4 bg-gray-50">
                         <h3 className="font-semibold text-gray-900">Recent Transactions</h3>
