@@ -160,4 +160,4 @@ Proprietary - SnapLabs Global © 2026
 
 ## Contact
 
-For questions or support, contact the AG Development Team.
+For   questions or support, contact the AG Development Team.
