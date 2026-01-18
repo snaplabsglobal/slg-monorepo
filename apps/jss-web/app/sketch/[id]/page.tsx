@@ -1,46 +1,26 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { ArrowLeft, Minus, Square, Type, Smartphone, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Smartphone, Save, Undo, CornerDownLeft, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { calculatePolygonArea, pixelsToSqFt, snapToAngle, Point } from '@/utils/geometry';
-import { getTerm } from '@/utils/terms';
+import { calculatePolygonArea, pixelsToSqFt, snapToAngle, projectPoint, Point } from '@/utils/geometry';
 
 export default function SketchPage({ params }: { params: { id: string } }) {
     const supabase = createClient();
     const router = useRouter();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // State
-    const [tool, setTool] = useState<'LINE' | 'RECT' | 'LABEL'>('LINE');
-    const [isDrawing, setIsDrawing] = useState(false);
+    // Keypad Logic State
+    const [showKeypad, setShowKeypad] = useState(false);
+    const [keypadValue, setKeypadValue] = useState('');
+    const [pendingVector, setPendingVector] = useState<{ start: Point, angle: number } | null>(null);
 
-    // Data
-    const [lines, setLines] = useState<Point[][]>([]); // Array of segments [start, end]
-    // Note: For SqFt we need loops. Currently just storing lines. 
-    // V2: Auto-detect loops from lines. For V1.2 "Area" logic might be "Draw Rect" primarily for area?
-    // User Requirement: "Straight Line First". "Draw closed space -> SqFt".
-    // Let's assume user draws continuous lines that loop?
-    // Let's stick to simple "Paths" structure but enforce straight segments.
-    // Actually, "Line" tool usually means single segment. 
-    // "Polyline" is better for rooms. Let's make "LINE" behave like "Polyline" (click-click-click)?
-    // Requirement says: "Line, Rect, Label". 
-    // Let's implement "Drag Line" for single wall, "Drag Rect" for room.
-
-    // Let's stick to the previous "Paths" model but only allow straight lines.
-    // A path is [p1, p2, p3...].
-    // If Tool=LINE, we are adding to current path? Or just single segments? 
-    // "Orthogonal Drafter" usually implies disconnected lines or connected walls.
-    // Let's allow [RECT] for instant rooms (Calc Area) and [LINE] for walls.
-    // We will calculate area ONLY from RECTs for V1.2 robustness, or closed paths?
-    // Let's try to support closed paths calculation if possible.
-
-    const [paths, setPaths] = useState<Point[][]>([]); // Array of [p1, p2, p3, p4] (e.g. rects)
-    const [currentStart, setCurrentStart] = useState<Point | null>(null);
-    const [currentEnd, setCurrentEnd] = useState<Point | null>(null);
+    // Drawing State
+    const [paths, setPaths] = useState<Point[][]>([]); // Completed polygons/chains
+    const [activeChain, setActiveChain] = useState<Point[]>([]); // Current chain being drawn
+    const [currentCursor, setCurrentCursor] = useState<Point | null>(null); // Live cursor for rubberbanding
     const [snapLabel, setSnapLabel] = useState<string | null>(null);
-
     const [sqft, setSqFt] = useState(0);
     const [saving, setSaving] = useState(false);
 
@@ -51,15 +31,13 @@ export default function SketchPage({ params }: { params: { id: string } }) {
             if (data && data.data?.paths) {
                 setPaths(data.data.paths);
                 setSqFt(data.sqft || 0);
-                requestAnimationFrame(() => redraw(data.data.paths));
-            } else {
-                requestAnimationFrame(() => redraw([]));
             }
         };
         load();
     }, [params.id]);
 
-    const redraw = (currentPaths: Point[][], activeSegment?: { start: Point, end: Point }) => {
+    // Redraw Loop
+    useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -76,42 +54,47 @@ export default function SketchPage({ params }: { params: { id: string } }) {
         for (let y = 0; y <= canvas.height; y += 40) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
         ctx.stroke();
 
-        // Draw Paths
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
+        // Draw Completed Paths
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        currentPaths.forEach(path => {
+        paths.forEach(path => {
             if (path.length < 2) return;
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(path[0].x, path[0].y);
             path.forEach(p => ctx.lineTo(p.x, p.y));
-            ctx.closePath(); // Auto close for visual solidity
+            ctx.closePath();
             ctx.stroke();
-
-            // Fill
             ctx.fillStyle = 'rgba(0,0,0,0.05)';
             ctx.fill();
         });
 
-        // Draw Active
-        if (activeSegment) {
+        // Draw Active Chain
+        if (activeChain.length > 0) {
             ctx.strokeStyle = '#0066ff';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3;
             ctx.beginPath();
-
-            if (tool === 'RECT') {
-                const w = activeSegment.end.x - activeSegment.start.x;
-                const h = activeSegment.end.y - activeSegment.start.y;
-                ctx.rect(activeSegment.start.x, activeSegment.start.y, w, h);
-            } else {
-                ctx.moveTo(activeSegment.start.x, activeSegment.start.y);
-                ctx.lineTo(activeSegment.end.x, activeSegment.end.y);
-            }
+            ctx.moveTo(activeChain[0].x, activeChain[0].y);
+            activeChain.forEach(p => ctx.lineTo(p.x, p.y));
             ctx.stroke();
+
+            // Draw Rubberband to Cursor
+            if (currentCursor) {
+                const lastPoint = activeChain[activeChain.length - 1];
+                ctx.strokeStyle = '#0066ff';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(lastPoint.x, lastPoint.y);
+                ctx.lineTo(currentCursor.x, currentCursor.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
         }
-    };
+
+    }, [paths, activeChain, currentCursor]);
 
     const getPoint = (e: React.PointerEvent): Point => {
         const canvas = canvasRef.current;
@@ -120,87 +103,127 @@ export default function SketchPage({ params }: { params: { id: string } }) {
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
 
-    const handleStart = (e: React.PointerEvent) => {
-        e.preventDefault();
-        setIsDrawing(true);
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if (showKeypad) return;
         const p = getPoint(e);
-        setCurrentStart(p);
-        setCurrentEnd(p);
+
+        if (activeChain.length === 0) {
+            // Start new chain
+            setActiveChain([p]);
+        }
+        // If mid-chain, the down click doesn't do much, waiting for drag/up to define next segment direction
     };
 
-    const handleMove = (e: React.PointerEvent) => {
-        if (!isDrawing || !currentStart) return;
-        e.preventDefault();
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (showKeypad || activeChain.length === 0) return;
+        const p = getPoint(e);
 
-        let p = getPoint(e);
+        // Snapping from last point
+        const lastPoint = activeChain[activeChain.length - 1];
+        const snapped = snapToAngle(lastPoint, p, 15);
 
-        // Snapping Logic
-        if (tool === 'LINE') {
-            const snapped = snapToAngle(currentStart, p, 15); // 15px threshold
-            p = snapped.point;
-            setSnapLabel(snapped.label);
-        } else if (tool === 'RECT') {
-            // For Rect, maybe snap to grid? or just free sizing.
-            // Let's keep rect free for now, line is strict.
+        setCurrentCursor(snapped.point);
+        setSnapLabel(snapped.label);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (showKeypad || activeChain.length === 0 || !currentCursor) return;
+
+        const lastPoint = activeChain[activeChain.length - 1];
+
+        // Check closure (snap to start of chain)
+        const startPoint = activeChain[0];
+        const distToStart = Math.sqrt(Math.pow(currentCursor.x - startPoint.x, 2) + Math.pow(currentCursor.y - startPoint.y, 2));
+
+        if (distToStart < 20 && activeChain.length > 2) {
+            // Auto Closure!
+            const newPath = [...activeChain];
+            // Don't add currentCursor, just close visually by saving path. 
+            // Path is [p1, p2, p3...]. Redraw loop closes pLast -> p1.
+            const newPaths = [...paths, newPath];
+            setPaths(newPaths);
+
+            // Calc Area
+            let totalArea = 0;
+            newPaths.forEach(p => totalArea += calculatePolygonArea(p));
+            setSqFt(pixelsToSqFt(totalArea));
+
+            // Reset
+            setActiveChain([]);
+            setCurrentCursor(null);
             setSnapLabel(null);
+            return;
         }
 
-        setCurrentEnd(p);
-        redraw(paths, { start: currentStart, end: p });
+        // Trigger Keypad logic
+        // We know direction.
+        const dx = currentCursor.x - lastPoint.x;
+        const dy = currentCursor.y - lastPoint.y;
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = angleRad * (180 / Math.PI);
+
+        // Only trigger if dragged some distance
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 10) {
+            setPendingVector({ start: lastPoint, angle: angleDeg });
+            setKeypadValue(''); // Reset value
+            setShowKeypad(true); // Show Input
+        }
     };
 
-    const handleEnd = () => {
-        setIsDrawing(false);
-        setSnapLabel(null);
+    const handleKeypadSubmit = () => {
+        if (!pendingVector || !keypadValue) return;
 
-        if (currentStart && currentEnd) {
-            let newPath: Point[] = [];
+        const length = parseFloat(keypadValue);
+        if (isNaN(length) || length <= 0) return;
 
-            if (tool === 'RECT') {
-                // Convert rect to 4 points
-                newPath = [
-                    { x: currentStart.x, y: currentStart.y },
-                    { x: currentEnd.x, y: currentStart.y },
-                    { x: currentEnd.x, y: currentEnd.y },
-                    { x: currentStart.x, y: currentEnd.y }
-                ];
-            } else {
-                // LINE - just 2 points? 
-                // If we want closed loops from lines, we need 'Polyline' logic.
-                // For v1.2, let's treat a line as a simple segment.
-                // But geometry.ts area calc needs CLOSED polygon.
-                // If user draws 4 lines to make a box, we need to join them.
-                // Complexity!
-                // Simplify: tool is 'Orthgoonal Drafter'. 
-                // If TOOL=LINE, we just add a 2-point path. Area won't count unless it's a loop.
-                // Let's stick to RECT for Area for now to keep it robust.
-                newPath = [currentStart, currentEnd];
-            }
+        // Scale: 1 unit input = ? pixels. 
+        // V1 Assumption: User inputs FEET, we map 1 ft = 20 pixels or 1 inch = 1 pixel.
+        // Let's use 1 ft = 40 pixels for visibility? 
+        // Or 1 unit input = 1 pixel? No, precise input implies Feet usually.
+        // Reqs: "120 SqFt" calculation implies scale.
+        // Geometry util assumes 1px = 1 inch defaults.
+        // So if user types "12" (feet), that is 144 inches = 144 pixels.
+        const lengthPx = length * 12; // 1 ft = 12px (if 1px=1inch). 
+        // Wait, if 1px=1inch, 12 ft = 144 px.
+        // Let's use 12 for scaling factor to match 'pixelsToSqFt' divisor of 144.
 
-            if (newPath.length > 1) {
-                const newPaths = [...paths, newPath];
-                setPaths(newPaths);
+        const newPoint = projectPoint(pendingVector.start, pendingVector.angle, length * 20); // Scale factor 20 for visibility
+        // Wait, if we use arbitrary scale, sqft calc needs to match.
+        // geometry.ts: pixelsToSqFt = area / 144. This assumes 1 unit = 1 inch.
+        // If I draw 100px line, it thinks it's 100 inches (8.3 ft).
+        // If I want input "10" to mean 10 ft, I should generate 120 pixels.
+        // Let's use scale 1 ft = 20 pixels for screen fit, then adjust Area Calc?
+        // Let's stick to: visual pixels are abstract.
+        // Let's just say 1 input unit = 20 pixels.
+        // And adjust area calc: (Area in Px^2) / (20*20) = Area in unit^2.
+        // pixelsToSqFt devides by 144. 
+        // Let's hardcode scale: 1 ft input = 40 pixels. 
+        // Then Area / (40*40) = SqFt.
 
-                // Recalc sqft
-                let totalAreaPx = 0;
-                newPaths.forEach(path => totalAreaPx += calculatePolygonArea(path));
-                setSqFt(pixelsToSqFt(totalAreaPx));
+        const SCALE_PX_PER_FT = 40;
+        const finalPoint = projectPoint(pendingVector.start, pendingVector.angle, length * SCALE_PX_PER_FT);
 
-                redraw(newPaths);
-            }
-        }
+        setActiveChain([...activeChain, finalPoint]);
 
-        setCurrentStart(null);
-        setCurrentEnd(null);
+        setShowKeypad(false);
+        setPendingVector(null);
+        setKeypadValue('');
     };
 
     const handleSave = async () => {
         setSaving(true);
+        // Recalc Area correctly based on scale
+        let totalAreaPx = 0;
+        paths.forEach(p => totalAreaPx += calculatePolygonArea(p));
+        const SCALE_PX_PER_FT = 40;
+        const realSqFt = Math.round((totalAreaPx / (SCALE_PX_PER_FT * SCALE_PX_PER_FT)) * 100) / 100;
+
         const { error } = await supabase.from('project_drawings').insert({
             project_id: params.id,
-            name: `Ortho Sketch ${new Date().toLocaleTimeString()}`,
+            name: `Vector Sketch ${new Date().toLocaleTimeString()}`,
             data: { paths },
-            sqft: sqft
+            sqft: realSqFt
         });
         if (error) alert(error.message);
         else alert('Saved!');
@@ -210,94 +233,111 @@ export default function SketchPage({ params }: { params: { id: string } }) {
     const handleClear = () => {
         if (confirm("Clear canvas?")) {
             setPaths([]);
+            setActiveChain([]);
             setSqFt(0);
-            requestAnimationFrame(() => redraw([]));
         }
     };
 
+    // Keypad Component
+    const Keypad = () => (
+        <div className="absolute bottom-0 left-0 right-0 bg-gray-100 p-6 rounded-t-3xl shadow-2xl z-50 flex flex-col items-center animate-in slide-in-from-bottom">
+            <div className="w-full max-w-md">
+                <div className="flex justify-between items-center mb-4">
+                    <span className="text-gray-500 font-bold text-sm uppercase tracking-wider">Length (Feet)</span>
+                    <button onClick={() => setShowKeypad(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="text-4xl font-mono font-bold bg-white p-4 rounded-xl text-center mb-6 shadow-inner border border-gray-200">
+                    {keypadValue || '0'} <span className="text-gray-300 text-2xl">ft</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map((k) => (
+                        <button
+                            key={k}
+                            onClick={() => setKeypadValue(curr => curr + k)}
+                            className="bg-white p-4 rounded-xl font-bold text-xl shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-gray-700"
+                        >
+                            {k}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => setKeypadValue(curr => curr.slice(0, -1))}
+                        className="bg-red-50 p-4 rounded-xl font-bold text-xl shadow-sm hover:bg-red-100 text-red-500"
+                    >
+                        <CornerDownLeft className="w-6 h-6 mx-auto" />
+                    </button>
+                </div>
+                <button
+                    onClick={handleKeypadSubmit}
+                    className="w-full mt-6 bg-blue-600 text-white p-5 rounded-xl font-bold text-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                    CONFIRM <Check className="w-6 h-6" />
+                </button>
+            </div>
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 bg-white flex overflow-hidden touch-none">
-            {/* Left Toolbar (Minimalist) */}
-            <div className="w-24 bg-gray-100 border-r border-gray-200 flex flex-col items-center py-8 gap-8 z-20 shadow-xl">
-                <Link href={`/projects/${params.id}`} className="p-3 bg-white rounded-xl shadow-sm hover:scale-105 transition-transform text-gray-700">
+            {/* Top Bar for Area & Save (Merged) */}
+            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start pointer-events-none z-10">
+                <Link href={`/projects/${params.id}`} className="bg-white/90 backdrop-blur p-3 rounded-xl shadow-sm pointer-events-auto border border-gray-200 text-gray-700">
                     <ArrowLeft className="w-6 h-6" />
                 </Link>
 
-                <div className="h-px w-10 bg-gray-300" />
-
-                <button
-                    onClick={() => setTool('LINE')}
-                    className={`p-5 rounded-2xl transition-all ${tool === 'LINE' ? 'bg-black text-white shadow-lg scale-110 ring-4 ring-black/20' : 'bg-white text-gray-500 shadow-sm'}`}
-                >
-                    <Minus className="w-8 h-8" />
-                    <span className="text-[10px] block mt-1 font-bold tracking-wider">LINE</span>
-                </button>
-
-                <button
-                    onClick={() => setTool('RECT')}
-                    className={`p-5 rounded-2xl transition-all ${tool === 'RECT' ? 'bg-black text-white shadow-lg scale-110 ring-4 ring-black/20' : 'bg-white text-gray-500 shadow-sm'}`}
-                >
-                    <Square className="w-8 h-8" />
-                    <span className="text-[10px] block mt-1 font-bold tracking-wider">RECT</span>
-                </button>
-
-                <button
-                    onClick={() => setTool('LABEL')}
-                    className={`p-5 rounded-2xl transition-all ${tool === 'LABEL' ? 'bg-black text-white shadow-lg scale-110 ring-4 ring-black/20' : 'bg-white text-gray-500 shadow-sm'}`}
-                >
-                    <Type className="w-8 h-8" />
-                    <span className="text-[10px] block mt-1 font-bold tracking-wider">LABEL</span>
-                </button>
-
-                <div className="mt-auto">
-                    <button onClick={handleClear} className="p-3 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                        <Trash2 className="w-6 h-6" />
-                    </button>
+                <div className="bg-black/90 backdrop-blur text-white px-8 py-3 rounded-full font-mono text-xl shadow-2xl flex items-center gap-4">
+                    <span className="text-gray-400 text-xs font-sans font-bold tracking-widest uppercase">AREA</span>
+                    <div>
+                        <span className="font-bold text-yellow-400 text-2xl">{sqft}</span>
+                        <span className="text-sm text-gray-400 ml-1">SQFT</span>
+                    </div>
                 </div>
+
+                <button
+                    onClick={handleSave}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-xl shadow-lg font-bold pointer-events-auto hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+                >
+                    <Save className="w-5 h-5" /> SAVE
+                </button>
             </div>
 
             {/* Canvas */}
-            <div className="flex-1 relative bg-white">
+            <div className="flex-1 relative bg-white cursor-crosshair">
                 <canvas
                     ref={canvasRef}
-                    width={1024}
-                    height={768} // Dynamic later
-                    className="w-full h-full touch-none cursor-crosshair"
-                    onPointerDown={handleStart}
-                    onPointerMove={handleMove}
-                    onPointerUp={handleEnd}
-                    onPointerLeave={handleEnd}
+                    width={1180} // iPad Pro width approx
+                    height={820}
+                    className="w-full h-full touch-none"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
                 />
 
-                {/* Snapping Indicator */}
-                {snapLabel && isDrawing && currentEnd && (
+                {snapLabel && currentCursor && !showKeypad && (
                     <div
                         className="absolute px-2 py-1 bg-green-500 text-white text-xs font-bold rounded shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-full mb-4"
-                        style={{ left: currentEnd.x, top: currentEnd.y }}
+                        style={{ left: currentCursor.x, top: currentCursor.y }}
                     >
                         {snapLabel}
                     </div>
                 )}
-
-                {/* Area Indicator */}
-                <div className="absolute top-6 left-6 bg-black text-white px-6 py-3 rounded-full font-mono text-xl shadow-2xl pointer-events-none select-none flex items-center gap-3">
-                    <span className="text-gray-400 text-sm font-sans font-bold tracking-widest uppercase">Total Area</span>
-                    <span className="font-bold text-yellow-400">{sqft}</span>
-                    <span className="text-sm text-gray-400">SqFt</span>
-                </div>
             </div>
 
-            {/* Right Toolbar (Save) */}
-            <div className="absolute top-6 right-6">
-                <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 active:scale-95 transition-all font-bold tracking-wide"
-                >
-                    {saving ? <Smartphone className="w-5 h-5 animate-pulse" /> : <Save className="w-5 h-5" />}
-                    SAVE PLAN
+            {/* Helper Hint */}
+            {!showKeypad && activeChain.length === 0 && (
+                <div className="absolute bottom-10 left-0 right-0 text-center pointer-events-none opacity-50">
+                    <p className="text-sm text-gray-400 font-medium">Drag and release to create walls</p>
+                </div>
+            )}
+
+            {/* Tools (Clear) */}
+            <div className="absolute bottom-10 left-10 pointer-events-auto">
+                <button onClick={handleClear} className="p-4 bg-gray-100 text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-sm">
+                    <Trash2 className="w-6 h-6" />
                 </button>
             </div>
+
+            {/* Keypad Overlay */}
+            {showKeypad && <Keypad />}
         </div>
     );
 }
