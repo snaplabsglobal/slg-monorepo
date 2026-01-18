@@ -84,7 +84,19 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
         setIsCapturing(false);
     };
 
-    const capturePhoto = () => {
+    const dataURLToBlob = (dataURL: string) => {
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    };
+
+    const capturePhoto = async () => {
         if (!videoRef.current) return;
 
         const canvas = document.createElement('canvas');
@@ -96,15 +108,57 @@ export const CameraCapture = ({ jobId }: { jobId?: string }) => {
             ctx.drawImage(videoRef.current, 0, 0);
             const imageData = canvas.toDataURL('image/jpeg', 0.95);
 
-            // Job Association Logic: Include jobId in payload
-            const payload = {
-                image: imageData.substring(0, 50) + '...',
-                jobId: jobId || 'unassigned', // Associate with specific job
-                timestamp: new Date().toISOString()
-            };
+            // 1. Convert to Blob
+            const blob = dataURLToBlob(imageData);
+            const filename = `receipt_${Date.now()}.jpg`;
 
-            // TODO: Send to AI recognition API
-            console.log('Captured image with Job Association:', payload);
+            try {
+                // 2. Get Signed URL
+                console.log('Requesting Signed URL...');
+                const { data: signData, error: signError } = await supabase.functions.invoke('upload-signer', {
+                    body: { filename, contentType: 'image/jpeg' }
+                });
+
+                if (signError) throw signError;
+                if (!signData?.uploadUrl) throw new Error('No upload URL returned');
+
+                console.log('Uploading to R2...', signData.uploadUrl);
+
+                // 3. Upload to R2
+                const uploadRes = await fetch(signData.uploadUrl, {
+                    method: 'PUT',
+                    body: blob,
+                    headers: { 'Content-Type': 'image/jpeg' }
+                });
+
+                if (!uploadRes.ok) throw new Error('Failed to upload to R2');
+
+                const publicUrl = signData.publicUrl;
+                console.log('Upload Success:', publicUrl);
+
+                // 4. Save to Database (Transaction Stub)
+                const { error: dbError } = await supabase.from('transactions').insert({
+                    description: 'Pending Receipt Processing...',
+                    transaction_date: new Date().toISOString(),
+                    total_amount: 0, // Placeholder
+                    status: 'pending',
+                    receipt_url: publicUrl,
+                    org_id: (await supabase.auth.getUser()).data.user?.id // Temporary: Use proper org logic if available
+                    // logic usually requires profile join, but for test:
+                }).select();
+
+                if (dbError) console.error('DB Insert Error:', dbError);
+                else {
+                    alert('Upload Complete! Check Dashboard.');
+                    if (jobId) {
+                        // Associate with Job Logic
+                    }
+                }
+
+            } catch (e: any) {
+                console.error('Upload Process Failed:', e);
+                setError('Upload Failed: ' + e.message);
+            }
 
             // Stop camera after capture
             stopCamera();
