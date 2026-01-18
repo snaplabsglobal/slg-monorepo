@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import BottomNav from "./components/nav/BottomNav";
+import FeedbackWidget from "./components/feedback/FeedbackWidget";
 
 export const metadata: Metadata = {
   title: "LedgerSnap - 3秒完成收据处理",
@@ -29,6 +30,7 @@ export default function RootLayout({
       <body>
         {children}
         <BottomNav />
+        <FeedbackWidget />
       </body>
     </html>
   );
