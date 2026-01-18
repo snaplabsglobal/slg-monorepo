@@ -38,7 +38,7 @@ export default function MoveProjectModal({ isOpen, onClose, transactionId, curre
 
         const { error } = await supabase
             .from('transactions')
-            .update({ project_id: selectedProjectId })
+            .update({ project_id: selectedProjectId === 'NULL_UNASSIGNED' ? null : selectedProjectId })
             .eq('id', transactionId);
 
         if (error) {
@@ -101,6 +101,8 @@ export default function MoveProjectModal({ isOpen, onClose, transactionId, curre
                                         className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 p-2"
                                     >
                                         <option value="">Select Target {getTerm('PROJECT')}...</option>
+                                        <option value="NULL_UNASSIGNED" className="font-bold text-orange-600">[ UNASSIGNED / GENERAL STOCK ]</option>
+                                        <hr />
                                         {projects.map(p => (
                                             <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
                                         ))}

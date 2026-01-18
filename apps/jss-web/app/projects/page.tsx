@@ -23,6 +23,14 @@ export default async function ProjectsDashboard() {
         return <div className="p-8 text-red-500">Failed to load projects.</div>;
     }
 
+    // Fetch Unassigned Count
+    const { count: unassignedCount } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .is('project_id', null)
+        .neq('status', 'void') // Don't count voided
+        .eq('direction', 'expense'); // Only expenses
+
     return (
         <div className="min-h-screen bg-gray-50 p-6 md:p-10">
             <div className="max-w-7xl mx-auto space-y-8">
@@ -40,89 +48,127 @@ export default async function ProjectsDashboard() {
                     </Link>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {projects?.map((project) => {
-                        // Calculate Health
-                        const spent = project.total_spent_materials || 0;
-                        const budget = project.total_budget || 0;
-                        const ratio = budget > 0 ? (spent / budget) : 0;
+                {/* Unassigned Stock Alert */}
+                {/* Dynamically fetched in the same component for simple server rendering */}
+                {(() => {
+                    // Note: In Next.js Server Components, we can do async calls. 
+                    // However, 'projects' is already fetched above. We need a separate count.
+                    // Ideally we should have done `Promise.all`. For now, let's just assume we want to call it here or refactor.
+                    // Refactoring slightly to do Promise.all would be cleaner but let's stick to the flow.
+                    return null;
+                })()}
 
-                        let healthColor = 'text-green-600';
-                        let HealthIcon = CheckCircle;
-                        if (ratio > 0.9) {
-                            healthColor = 'text-red-600';
-                            HealthIcon = AlertTriangle;
-                        } else if (ratio > 0.7) {
-                            healthColor = 'text-yellow-600';
-                            HealthIcon = TrendingUp; // Rising
-                        }
+                {/* 
+                   AG: Injecting fetching logic directly into the component body above return statement 
+                   is better practice. I will add the fetch logic at the top level.
+                */}
 
-                        return (
-                            <Link
-                                key={project.project_id}
-                                href={`/projects/${project.project_id}`}
-                                className="block group"
-                            >
-                                <div className="bg-white border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-                                    {/* Status Stripe */}
-                                    <div className={`absolute top-0 left-0 w-1 h-full ${ratio > 0.9 ? 'bg-red-500' : 'bg-green-500'}`} />
+            </div>
 
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-gray-100 rounded-lg">
-                                                <Building2 className="w-6 h-6 text-gray-700" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                    {project.project_name}
-                                                </h3>
-                                                <span className="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full">
-                                                    {project.status}
-                                                </span>
-                                            </div>
+            {/* Unassigned Receipts Banner */}
+            {(unassignedCount || 0) > 0 && (
+                <div className="bg-orange-50 border-l-4 border-[#FF7E21] p-4 rounded-r-lg flex justify-between items-center shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="text-[#FF7E21] w-6 h-6" />
+                        <div>
+                            <h3 className="font-bold text-gray-900">Processing Queue Action Required</h3>
+                            <p className="text-sm text-gray-600">
+                                You have <span className="font-bold text-gray-900">{unassignedCount}</span> unassigned receipts (orphaned expenses).
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        href="/dashboard?filter=unassigned"
+                        className="bg-white text-gray-900 border px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50 shadow-sm"
+                    >
+                        Review Now &rarr;
+                    </Link>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects?.map((project) => {
+                    // Calculate Health
+                    const spent = project.total_spent_materials || 0;
+                    const budget = project.total_budget || 0;
+                    const ratio = budget > 0 ? (spent / budget) : 0;
+
+                    let healthColor = 'text-green-600';
+                    let HealthIcon = CheckCircle;
+                    if (ratio > 0.9) {
+                        healthColor = 'text-red-600';
+                        HealthIcon = AlertTriangle;
+                    } else if (ratio > 0.7) {
+                        healthColor = 'text-yellow-600';
+                        HealthIcon = TrendingUp; // Rising
+                    }
+
+                    return (
+                        <Link
+                            key={project.project_id}
+                            href={`/projects/${project.project_id}`}
+                            className="block group"
+                        >
+                            <div className="bg-white border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                                {/* Status Stripe */}
+                                <div className={`absolute top-0 left-0 w-1 h-full ${ratio > 0.9 ? 'bg-red-500' : 'bg-green-500'}`} />
+
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-gray-100 rounded-lg">
+                                            <Building2 className="w-6 h-6 text-gray-700" />
                                         </div>
-                                        <HealthIcon className={`w-5 h-5 ${healthColor}`} />
+                                        <div>
+                                            <h3 className="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                {project.project_name}
+                                            </h3>
+                                            <span className="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full">
+                                                {project.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <HealthIcon className={`w-5 h-5 ${healthColor}`} />
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="text-gray-500">Budget Spent</span>
+                                            <span className={`font-medium ${healthColor}`}>
+                                                {(ratio * 100).toFixed(0)}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-100 rounded-full h-2">
+                                            <div
+                                                className={`h-2 rounded-full ${ratio > 0.9 ? 'bg-red-500' : (ratio > 0.7 ? 'bg-yellow-500' : 'bg-green-500')}`}
+                                                style={{ width: `${Math.min(ratio * 100, 100)}%` }}
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
                                         <div>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="text-gray-500">Budget Spent</span>
-                                                <span className={`font-medium ${healthColor}`}>
-                                                    {(ratio * 100).toFixed(0)}%
-                                                </span>
-                                            </div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2">
-                                                <div
-                                                    className={`h-2 rounded-full ${ratio > 0.9 ? 'bg-red-500' : (ratio > 0.7 ? 'bg-yellow-500' : 'bg-green-500')}`}
-                                                    style={{ width: `${Math.min(ratio * 100, 100)}%` }}
-                                                />
-                                            </div>
+                                            <p className="text-xs text-gray-400 uppercase tracking-wider">Spent</p>
+                                            <p className="font-mono text-lg font-medium">${spent.toLocaleString()}</p>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-4 pt-2">
-                                            <div>
-                                                <p className="text-xs text-gray-400 uppercase tracking-wider">Spent</p>
-                                                <p className="font-mono text-lg font-medium">${spent.toLocaleString()}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xs text-gray-400 uppercase tracking-wider">Budget</p>
-                                                <p className="font-mono text-lg font-medium text-gray-500">${budget.toLocaleString()}</p>
-                                            </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400 uppercase tracking-wider">Budget</p>
+                                            <p className="font-mono text-lg font-medium text-gray-500">${budget.toLocaleString()}</p>
                                         </div>
                                     </div>
                                 </div>
-                            </Link>
-                        );
-                    })}
+                            </div>
+                        </Link>
+                    );
+                })}
 
-                    {(!projects || projects.length === 0) && (
-                        <div className="col-span-full py-12 text-center text-gray-500 bg-white border border-dashed rounded-xl">
-                            No active projects found. Start by creating one.
-                        </div>
-                    )}
-                </div>
+                {(!projects || projects.length === 0) && (
+                    <div className="col-span-full py-12 text-center text-gray-500 bg-white border border-dashed rounded-xl">
+                        No active projects found. Start by creating one.
+                    </div>
+                )}
             </div>
         </div>
+        </div >
     );
 }
