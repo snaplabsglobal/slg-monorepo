@@ -31,7 +31,8 @@
         "tokens",
         "hooks",
         "utils",
-        "styles"
+        "styles",
+        "types"
     ],
     "exclude": [
         "node_modules",

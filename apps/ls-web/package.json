@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev --webpack -p 3000",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint"
@@ -11,10 +11,7 @@
   "dependencies": {
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@slg/core-logic": "workspace:*",
-    "@slg/ui-kit": "workspace:*",
-    "@slg/config": "workspace:*"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
