@@ -1,14 +1,8 @@
 {
-    "version": 2,
-    "buildCommand": "cd apps/jss-app && npm install && npm run build",
-    "installCommand": "cd apps/jss-app && npm install",
-    "framework": "nextjs",
-    "outputDirectory": "apps/jss-app/.next",
-    "name": "ledger-snap-v1",
-    "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/api/$1"
-        }
-    ]
+  "version": 2,
+  "buildCommand": "cd ../.. && pnpm install && pnpm --filter ls-web build",
+  "installCommand": "cd ../.. && pnpm install",
+  "framework": "nextjs",
+  "outputDirectory": "apps/ls-web/.next",
+  "name": "ls-web-dev"
 }
