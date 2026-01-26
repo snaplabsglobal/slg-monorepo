@@ -1,8 +1,16 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Use webpack instead of Turbopack to avoid "too many open files" error
     // Explicitly disable Turbopack by setting empty config
     turbopack: {},
+    // Set output file tracing root to monorepo root for proper dependency resolution
+    outputFileTracingRoot: path.join(__dirname, '../..'),
     // Use very aggressive watch options (dev only)
     webpack: (config, { isServer, dev }) => {
         if (dev) {
