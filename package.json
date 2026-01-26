@@ -3,10 +3,6 @@
     "version": "1.0.0",
     "private": true,
     "description": "SnapLabs Global - Unified Frontend Monorepo",
-    "workspaces": [
-        "apps/*",
-        "packages/*"
-    ],
     "scripts": {
         "dev": "turbo run dev",
         "build": "turbo run build",
