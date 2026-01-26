@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "cd ../.. && pnpm install && pnpm --filter ls-web... build",
+  "buildCommand": "pnpm --filter ls-web... build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "cd ../.. && pnpm install",
+  "installCommand": "NODE_ENV=development pnpm install --frozen-lockfile",
   "devCommand": "cd ../.. && pnpm --filter ls-web dev"
 }
