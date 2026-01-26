@@ -89,7 +89,13 @@ export const ProductShowcase = () => {
                             </ul>
 
                             <a
-                                href={`#${product.name.toLowerCase()}`}
+                                href={
+                                    product.name === 'LedgerSnap' 
+                                        ? 'https://dev.ledgersnap.app' 
+                                        : 'https://dev.jobsitesnap.app'
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className={styles.learnMore}
                             >
                                 Learn More
