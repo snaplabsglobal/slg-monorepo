@@ -6,9 +6,9 @@
 
 This monorepo contains the complete frontend ecosystem for SnapLabs Global:
 
-- **SLG Portal** (`apps/slg-portal`) - Brand showcase website
-- **LedgerSnap** (`apps/ledgersnap`) - Mobile-first receipt management tool
-- **JobSite Snap** (`apps/jobsitesnap`) - Construction project management dashboard
+- **LedgerSnap Web** (`apps/ls-web`) - Mobile-first receipt management tool
+- **JobSite Snap Web** (`apps/jss-web`) - Construction project management dashboard
+- **Corporate Hub** (`apps/corporate-hub`) - Brand showcase website
 - **SnapUI** (`packages/snap-ui`) - Shared component library and design system
 
 ## Tech Stack
@@ -84,15 +84,19 @@ npm run type-check
 ```
 slo-monorepos/
 ├── apps/
-│   ├── slg-portal/          # SLG - The Face
-│   ├── ledgersnap/          # LS - The Edge
-│   └── jobsitesnap/         # JSS - The Core
+│   ├── ls-web/              # LedgerSnap - Receipt Management
+│   ├── jss-web/             # JobSite Snap - Project Management
+│   └── corporate-hub/       # Corporate Hub - Brand Showcase
 ├── packages/
 │   ├── snap-ui/             # Shared component library
 │   ├── snap-types/          # Shared TypeScript types
-│   └── snap-config/         # Shared configs
-├── tools/
-│   └── scripts/             # Build and deployment scripts
+│   ├── snap-config/         # Shared configs
+│   ├── core-logic/          # Core business logic
+│   └── ui-kit/              # UI component kit
+├── supabase/
+│   ├── functions/          # Edge Functions
+│   └── migrations/         # Database migrations
+├── scripts/                 # Build and deployment scripts
 ├── turbo.json               # Turborepo configuration
 └── package.json             # Root package.json
 ```
