@@ -8,6 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.30
+      '@types/react':
+        specifier: ^19.2.9
+        version: 19.2.9
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.9)
       prettier:
         specifier: ^3.1.1
         version: 3.8.1
@@ -15,7 +24,7 @@ importers:
         specifier: ^1.11.0
         version: 1.13.4
       typescript:
-        specifier: ^5.3.3
+        specifier: ^5.9.3
         version: 5.9.3
 
   apps/jss-web:
@@ -37,13 +46,13 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       '@types/node':
-        specifier: ^20
+        specifier: ^20.19.30
         version: 20.19.30
       '@types/react':
-        specifier: ^19
+        specifier: ^19.2.9
         version: 19.2.9
       '@types/react-dom':
-        specifier: ^19
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.9)
       eslint:
         specifier: ^9
@@ -52,7 +61,7 @@ importers:
         specifier: 16.1.1
         version: 16.1.1(@typescript-eslint/parser@8.53.1)(eslint@9.39.2)(typescript@5.9.3)
       typescript:
-        specifier: ^5
+        specifier: ^5.9.3
         version: 5.9.3
 
   apps/ls-web:
@@ -71,13 +80,13 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       '@types/node':
-        specifier: ^20
+        specifier: ^20.19.30
         version: 20.19.30
       '@types/react':
-        specifier: ^19
+        specifier: ^19.2.9
         version: 19.2.9
       '@types/react-dom':
-        specifier: ^19
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.9)
       eslint:
         specifier: ^9
@@ -86,7 +95,7 @@ importers:
         specifier: 16.1.1
         version: 16.1.1(@typescript-eslint/parser@8.53.1)(eslint@9.39.2)(typescript@5.9.3)
       typescript:
-        specifier: ^5
+        specifier: ^5.9.3
         version: 5.9.3
 
   apps/slg-corporate:
@@ -108,13 +117,13 @@ importers:
         version: 19.2.3(react@19.2.3)
     devDependencies:
       '@types/node':
-        specifier: ^20
+        specifier: ^20.19.30
         version: 20.19.30
       '@types/react':
-        specifier: ^19
+        specifier: ^19.2.9
         version: 19.2.9
       '@types/react-dom':
-        specifier: ^19
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.9)
       eslint:
         specifier: ^9
@@ -123,7 +132,7 @@ importers:
         specifier: 16.1.1
         version: 16.1.1(@typescript-eslint/parser@8.53.1)(eslint@9.39.2)(typescript@5.9.3)
       typescript:
-        specifier: ^5
+        specifier: ^5.9.3
         version: 5.9.3
 
   packages/snap-types:
@@ -164,7 +173,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^1.1.0
-        version: 1.6.1
+        version: 1.6.1(@types/node@20.19.30)
 
 packages:
 
@@ -2158,7 +2167,7 @@ packages:
       react: '>=16'
     dependencies:
       '@types/mdx': 2.0.13
-      '@types/react': 18.3.27
+      '@types/react': 19.2.9
       react: 18.3.1
     dev: true
 
@@ -8794,7 +8803,7 @@ packages:
     hasBin: true
     dev: true
 
-  /vite-node@1.6.1:
+  /vite-node@1.6.1(@types/node@20.19.30):
     resolution: {integrity: sha512-YAXkfvGtuTzwWbDSACdJSg4A4DZiAqckWe90Zapc/sEX3XvHcw1NdurM/6od8J207tSDqNbSsgdCacBgvJKFuA==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -8803,7 +8812,7 @@ packages:
       debug: 4.4.3
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@20.19.30)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -8816,7 +8825,7 @@ packages:
       - terser
     dev: true
 
-  /vite@5.4.21:
+  /vite@5.4.21(@types/node@20.19.30):
     resolution: {integrity: sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -8847,6 +8856,7 @@ packages:
       terser:
         optional: true
     dependencies:
+      '@types/node': 20.19.30
       esbuild: 0.21.5
       postcss: 8.5.6
       rollup: 4.56.0
@@ -8854,7 +8864,7 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vitest@1.6.1:
+  /vitest@1.6.1(@types/node@20.19.30):
     resolution: {integrity: sha512-Ljb1cnSJSivGN0LqXd/zmDbWEM0RNNg2t1QW/XUhYl/qPqyu7CsqeWtqQXHVaJsecLPuDoak2oJcZN2QoRIOag==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -8879,6 +8889,7 @@ packages:
       jsdom:
         optional: true
     dependencies:
+      '@types/node': 20.19.30
       '@vitest/expect': 1.6.1
       '@vitest/runner': 1.6.1
       '@vitest/snapshot': 1.6.1
@@ -8896,8 +8907,8 @@ packages:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.21
-      vite-node: 1.6.1
+      vite: 5.4.21(@types/node@20.19.30)
+      vite-node: 1.6.1(@types/node@20.19.30)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - less

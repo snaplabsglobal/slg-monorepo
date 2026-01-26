@@ -10,18 +10,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@slo/snap-ui": "*",
+    "framer-motion": "^10.16.16",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@slo/snap-ui": "*",
-    "framer-motion": "^10.16.16"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/node": "^20.19.30",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }

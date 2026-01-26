@@ -13,9 +13,12 @@
         "clean": "turbo run clean && rm -rf node_modules"
     },
     "devDependencies": {
-        "turbo": "^1.11.0",
+        "@types/node": "^20",
+        "@types/react": "^19.2.9",
+        "@types/react-dom": "^19.2.3",
         "prettier": "^3.1.1",
-        "typescript": "^5.3.3"
+        "turbo": "^1.11.0",
+        "typescript": "^5.9.3"
     },
     "engines": {
         "node": ">=20.0.0",
