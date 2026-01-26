@@ -80,13 +80,13 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       '@types/node':
-        specifier: ^20.19.30
+        specifier: ^20
         version: 20.19.30
       '@types/react':
-        specifier: ^19.2.9
+        specifier: ^19
         version: 19.2.9
       '@types/react-dom':
-        specifier: ^19.2.3
+        specifier: ^19
         version: 19.2.3(@types/react@19.2.9)
       eslint:
         specifier: ^9
@@ -95,7 +95,7 @@ importers:
         specifier: 16.1.1
         version: 16.1.1(@typescript-eslint/parser@8.53.1)(eslint@9.39.2)(typescript@5.9.3)
       typescript:
-        specifier: ^5.9.3
+        specifier: ^5
         version: 5.9.3
 
   apps/slg-corporate:
