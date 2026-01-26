@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Use webpack instead of Turbopack to avoid "too many open files" error
-    // Use very aggressive watch options
+    // Explicitly disable Turbopack by setting empty config
+    turbopack: {},
+    // Use very aggressive watch options (dev only)
     webpack: (config, { isServer, dev }) => {
         if (dev) {
             // Use polling mode exclusively to avoid inotify limits
