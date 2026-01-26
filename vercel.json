@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "buildCommand": "pnpm install && pnpm --filter ls-web build",
-  "installCommand": "pnpm install",
-  "framework": "nextjs",
-  "outputDirectory": "apps/ls-web/.next"
-}
