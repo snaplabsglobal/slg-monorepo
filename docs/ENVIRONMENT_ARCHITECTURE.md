@@ -29,7 +29,7 @@ Vercel 部署:
   ✅ 3 个应用门户
      - ls-web (LedgerSnap)
      - jss-web (JobSite Snap)
-     - corporate-hub (官网)
+     - slg-corporate (官网)
   
   ✅ 2 个环境
      - dev.*.app (开发预览)

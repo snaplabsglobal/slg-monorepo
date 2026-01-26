@@ -10,8 +10,8 @@ slg-monorepo/
 │   │   └── .env.local            # ls-web 应用特定配置
 │   ├── jss-web/
 │   │   └── .env.local            # jss-web 应用特定配置
-│   └── corporate-hub/
-│       └── .env.local            # corporate-hub 应用特定配置
+│   └── slg-corporate/
+│       └── .env.local            # slg-corporate 应用特定配置
 ```
 
 ## 配置说明
@@ -33,7 +33,7 @@ slg-monorepo/
 - 引用共享 Supabase 配置
 - `GOOGLE_MAPS_API_KEY` - Google Maps API 密钥
 
-#### `apps/corporate-hub/.env.local`
+#### `apps/slg-corporate/.env.local`
 - 引用共享 Supabase 配置
 - `SENDGRID_API_KEY` - SendGrid API 密钥（用于邮件发送）
 

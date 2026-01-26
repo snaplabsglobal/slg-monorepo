@@ -1,6 +1,6 @@
 .
 ├── apps
-│   ├── corporate-hub
+│   ├── slg-corporate
 │   │   ├── app
 │   │   │   ├── components
 │   │   │   │   ├── Hero.module.css

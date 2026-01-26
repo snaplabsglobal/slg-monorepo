@@ -8,7 +8,7 @@ This monorepo contains the complete frontend ecosystem for SnapLabs Global:
 
 - **LedgerSnap Web** (`apps/ls-web`) - Mobile-first receipt management tool
 - **JobSite Snap Web** (`apps/jss-web`) - Construction project management dashboard
-- **Corporate Hub** (`apps/corporate-hub`) - Brand showcase website
+- **SLG Corporate** (`apps/slg-corporate`) - Brand showcase website
 - **SnapUI** (`packages/snap-ui`) - Shared component library and design system
 
 ## Tech Stack
@@ -86,7 +86,7 @@ slo-monorepos/
 ├── apps/
 │   ├── ls-web/              # LedgerSnap - Receipt Management
 │   ├── jss-web/             # JobSite Snap - Project Management
-│   └── corporate-hub/       # Corporate Hub - Brand Showcase
+│   └── slg-corporate/      # SLG Corporate - Brand Showcase
 ├── packages/
 │   ├── snap-ui/             # Shared component library
 │   ├── snap-types/          # Shared TypeScript types

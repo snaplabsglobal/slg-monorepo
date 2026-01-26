@@ -48,7 +48,7 @@
       }
     },
     {
-      "src": "apps/corporate-hub/package.json",
+      "src": "apps/slg-corporate/package.json",
       "use": "@vercel/next",
       "config": {
         "distDir": ".next"
@@ -74,7 +74,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/apps/corporate-hub/$1",
+      "dest": "/apps/slg-corporate/$1",
       "headers": {
         "host": "dev.snaplabs.global"
       }
@@ -146,7 +146,7 @@ Install Command:
   Vercel 一个项目只能部署一个应用输出
 
 现实:
-  你有 3 个应用（ls-web, jss-web, corporate-hub）
+  你有 3 个应用（ls-web, jss-web, slg-corporate）
   需要 3 个独立的部署
 
 解决方案:
@@ -247,8 +247,8 @@ Install Command:
    选择: your-monorepo (相同仓库) ✅
 
 3. 配置:
-   Project Name: corporate-hub
-   Root Directory: apps/corporate-hub ✅
+   Project Name: slg-corporate
+   Root Directory: apps/slg-corporate ✅
    Framework Preset: Next.js
 
 4. 环境变量:
@@ -277,10 +277,10 @@ Vercel Dashboard 会显示:
 │    Git: your-monorepo (相同)     │
 │    Root: apps/jss-web            │
 ├──────────────────────────────────┤
-│ 📦 corporate-hub                 │
+│ 📦 slg-corporate                 │
 │    dev.snaplabs.global           │
 │    Git: your-monorepo (相同)     │
-│    Root: apps/corporate-hub      │
+│    Root: apps/slg-corporate      │
 └──────────────────────────────────┘
 
 关键点:
@@ -334,7 +334,7 @@ Vercel 的"项目"不是"仓库"：
 3. Vercel 检测改动:
    - ls-web 项目: apps/ls-web/ 改了 → 部署 ✅
    - jss-web 项目: 无相关改动 → 不部署 ⏸️
-   - corporate-hub: 无相关改动 → 不部署 ⏸️
+   - slg-corporate: 无相关改动 → 不部署 ⏸️
 
 4. 只有 ls-web 项目重新部署
 
@@ -367,8 +367,8 @@ Vercel 的"项目"不是"仓库"：
   3. 创建 jss-web 项目  
      → Root Directory: apps/jss-web
   
-  4. 创建 corporate-hub 项目
-     → Root Directory: apps/corporate-hub
+  4. 创建 slg-corporate 项目
+     → Root Directory: apps/slg-corporate
   
   5. 每个项目配置对应的域名和环境变量
 ```
