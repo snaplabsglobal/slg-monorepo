@@ -5,6 +5,9 @@
 -- Author: CTO Patrick (via Claude)
 -- ============================================
 
+-- 确保 pgcrypto 扩展已启用
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ============================================
 -- 1. QR BATCH (QR 批次表) - 新增
 -- ============================================
@@ -278,7 +281,7 @@ BEGIN
   -- 使用 HMAC-SHA256 生成签名
   -- 实际生产中应该使用更安全的密钥管理
   NEW.signature := encode(
-    hmac(
+    extensions.hmac(
       NEW.qr_code || NEW.batch_id::text || NEW.created_at::text,
       'your-secret-key-here', -- 实际应该从环境变量读取
       'sha256'
