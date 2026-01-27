@@ -500,22 +500,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_properties_timestamp ON properties;
 CREATE TRIGGER update_properties_timestamp
   BEFORE UPDATE ON properties
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_companies_timestamp ON companies;
 CREATE TRIGGER update_companies_timestamp
   BEFORE UPDATE ON companies
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_equipment_timestamp ON equipment_registry;
 CREATE TRIGGER update_equipment_timestamp
   BEFORE UPDATE ON equipment_registry
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_service_timestamp ON service_history;
 CREATE TRIGGER update_service_timestamp
   BEFORE UPDATE ON service_history
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_request_timestamp ON service_requests;
 CREATE TRIGGER update_request_timestamp
   BEFORE UPDATE ON service_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -533,6 +538,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS auto_generate_qr_short_code ON equipment_registry;
 CREATE TRIGGER auto_generate_qr_short_code
   BEFORE INSERT ON equipment_registry
   FOR EACH ROW EXECUTE FUNCTION generate_qr_short_code();
@@ -553,6 +559,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS auto_calculate_next_maintenance ON service_history;
 CREATE TRIGGER auto_calculate_next_maintenance
   AFTER INSERT ON service_history
   FOR EACH ROW EXECUTE FUNCTION calculate_next_maintenance();
@@ -572,10 +579,12 @@ ALTER TABLE company_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE qr_generation_config ENABLE ROW LEVEL SECURITY;
 
 -- Equipment Registry RLS 策略
+DROP POLICY IF EXISTS "Public equipment viewable by all" ON equipment_registry;
 CREATE POLICY "Public equipment viewable by all"
   ON equipment_registry FOR SELECT
   USING (privacy_level = 'public');
 
+DROP POLICY IF EXISTS "Private equipment viewable by owner and technicians" ON equipment_registry;
 CREATE POLICY "Private equipment viewable by owner and technicians"
   ON equipment_registry FOR SELECT
   USING (
@@ -589,17 +598,20 @@ CREATE POLICY "Private equipment viewable by owner and technicians"
     )
   );
 
+DROP POLICY IF EXISTS "Technicians can register equipment" ON equipment_registry;
 CREATE POLICY "Technicians can register equipment"
   ON equipment_registry FOR INSERT
   WITH CHECK (
     auth.uid() = registered_by
   );
 
+DROP POLICY IF EXISTS "Technicians can update their registered equipment" ON equipment_registry;
 CREATE POLICY "Technicians can update their registered equipment"
   ON equipment_registry FOR UPDATE
   USING (auth.uid() = registered_by);
 
 -- Service History RLS 策略
+DROP POLICY IF EXISTS "Public equipment service history viewable" ON service_history;
 CREATE POLICY "Public equipment service history viewable"
   ON service_history FOR SELECT
   USING (
@@ -610,15 +622,18 @@ CREATE POLICY "Public equipment service history viewable"
     )
   );
 
+DROP POLICY IF EXISTS "Technicians can add service records" ON service_history;
 CREATE POLICY "Technicians can add service records"
   ON service_history FOR INSERT
   WITH CHECK (auth.uid() = technician_id);
 
 -- Service Requests RLS 策略
+DROP POLICY IF EXISTS "Users can view own requests" ON service_requests;
 CREATE POLICY "Users can view own requests"
   ON service_requests FOR SELECT
   USING (auth.uid() = requester_id);
 
+DROP POLICY IF EXISTS "Assigned companies can view requests" ON service_requests;
 CREATE POLICY "Assigned companies can view requests"
   ON service_requests FOR SELECT
   USING (
@@ -631,24 +646,29 @@ CREATE POLICY "Assigned companies can view requests"
     )
   );
 
+DROP POLICY IF EXISTS "Users can create service requests" ON service_requests;
 CREATE POLICY "Users can create service requests"
   ON service_requests FOR INSERT
   WITH CHECK (auth.uid() = requester_id);
 
 -- QR Scan Logs - 记录所有扫描（无 RLS 限制，用于分析）
+DROP POLICY IF EXISTS "Allow all scan logging" ON qr_scan_logs;
 CREATE POLICY "Allow all scan logging"
   ON qr_scan_logs FOR INSERT
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Users can view own scan history" ON qr_scan_logs;
 CREATE POLICY "Users can view own scan history"
   ON qr_scan_logs FOR SELECT
   USING (auth.uid() = scanned_by);
 
 -- Company Ratings RLS 策略
+DROP POLICY IF EXISTS "Published ratings viewable by all" ON company_ratings;
 CREATE POLICY "Published ratings viewable by all"
   ON company_ratings FOR SELECT
   USING (status = 'published');
 
+DROP POLICY IF EXISTS "Users can create ratings" ON company_ratings;
 CREATE POLICY "Users can create ratings"
   ON company_ratings FOR INSERT
   WITH CHECK (auth.uid() = reviewer_id);
