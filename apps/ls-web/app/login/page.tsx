@@ -1,13 +1,22 @@
-import Link from 'next/link'
+'use client'
 
+import { LoginForm } from '@slo/snap-auth/components/client'
+
+/**
+ * LedgerSnap Login Page
+ * Uses shared authentication components with architectural blue theme
+ * Focus: Financial rigor, professional, trustworthy
+ */
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-3xl mb-4">Login</h1>
-        <p className="mb-4">功能开发中...</p>
-        <Link href="/" className="text-blue-600">返回首页</Link>
-      </div>
-    </div>
+    <LoginForm
+      theme="ls-web"
+      redirectTo="/dashboard"
+      title="Welcome to LedgerSnap"
+      description="Sign in to manage your receipts and expenses"
+      showRegisterLink={true}
+      registerLink="/register"
+      appOrigin="LS"
+    />
   )
 }

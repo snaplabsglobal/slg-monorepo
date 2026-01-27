@@ -5,11 +5,14 @@ export default function LedgerSnapLanding() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b border-gray-200">
-        <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="text-2xl font-bold text-primary">
+        <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+          {/* Logo - shrink-0 to prevent squishing */}
+          <div className="text-xl sm:text-2xl font-bold text-primary shrink-0">
             LedgerSnap
           </div>
-          <div className="flex items-center space-x-6">
+          
+          {/* Desktop Navigation - hidden on mobile, visible on md+ */}
+          <div className="hidden md:flex items-center space-x-6">
             <Link href="#features" className="text-gray-700 hover:text-primary transition-colors">
               Features
             </Link>
@@ -23,6 +26,28 @@ export default function LedgerSnapLanding() {
               Login
             </Link>
           </div>
+
+          {/* Mobile Login Button - visible on mobile, hidden on md+ */}
+          {/* Using vibrant orange accent for visibility and easy tapping on construction sites */}
+          <Link 
+            href="/login"
+            className="md:hidden flex items-center justify-center w-12 h-12 rounded-lg border-2 border-orange-500 bg-orange-500 hover:bg-orange-600 transition-colors shadow-md active:scale-95"
+            aria-label="Login"
+          >
+            <svg 
+              className="w-6 h-6 text-white" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" 
+              />
+            </svg>
+          </Link>
         </nav>
       </header>
 

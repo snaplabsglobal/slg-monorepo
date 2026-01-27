@@ -9,10 +9,38 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // 活力橙 (Vibrant Orange) - Primary theme for JSS-Web
+        // Focus: Energy, action, construction site vibrancy
         primary: {
-          DEFAULT: "#F59E0B",
-          dark: "#D97706",
-          light: "#FBBF24",
+          DEFAULT: "#F97316", // Vibrant orange
+          dark: "#EA580C",
+          light: "#FB923C",
+          50: "#FFF7ED",
+          100: "#FFEDD5",
+          200: "#FED7AA",
+          300: "#FDBA74",
+          400: "#FB923C",
+          500: "#F97316",
+          600: "#EA580C",
+          700: "#C2410C",
+          800: "#9A3412",
+          900: "#7C2D12",
+        },
+        // Use primary orange as accent
+        accent: {
+          DEFAULT: "#F97316",
+          dark: "#EA580C",
+          light: "#FB923C",
+          50: "#FFF7ED",
+          100: "#FFEDD5",
+          200: "#FED7AA",
+          300: "#FDBA74",
+          400: "#FB923C",
+          500: "#F97316",
+          600: "#EA580C",
+          700: "#C2410C",
+          800: "#9A3412",
+          900: "#7C2D12",
         },
       },
     },

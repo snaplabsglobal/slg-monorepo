@@ -1,13 +1,20 @@
-import Link from 'next/link'
+'use client'
 
+import { RegisterForm } from '@slo/snap-auth/components/client'
+
+/**
+ * LedgerSnap Registration Page
+ * Uses shared authentication components with architectural blue theme
+ */
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-3xl mb-4">Register</h1>
-        <p className="mb-4">功能开发中...</p>
-        <Link href="/" className="text-blue-600">返回首页</Link>
-      </div>
-    </div>
+    <RegisterForm
+      theme="ls-web"
+      redirectTo="/dashboard"
+      title="Create Your Account"
+      description="Join LedgerSnap and start tracking your expenses"
+      showLoginLink={true}
+      loginLink="/login"
+    />
   )
 }

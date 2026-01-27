@@ -2,6 +2,9 @@
  * Shared TypeScript types for SnapLabs Global
  */
 
+// Auth and permissions
+export * from './src/auth'
+
 // Receipt types (shared across LS and JSS)
 export interface Receipt {
     id: string;

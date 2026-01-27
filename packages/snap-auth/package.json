@@ -1,0 +1,39 @@
+{
+  "name": "@slo/snap-auth",
+  "version": "1.0.0",
+  "description": "Shared authentication system for SnapLabs Global applications",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./server": "./dist/server.js",
+    "./middleware": "./dist/middleware.js",
+    "./components": "./dist/components/index.js",
+    "./components/client": "./dist/components/client.js",
+    "./themes": "./dist/themes/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slo/snap-types": "workspace:^",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.93.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0"
+  },
+  "peerDependencies": {
+    "next": "^16.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0 || ^19.0.0",
+    "typescript": "^5.9.3"
+  }
+}
