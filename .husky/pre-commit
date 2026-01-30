@@ -1,0 +1,16 @@
+#!/bin/sh
+# 部署哨兵 Layer 1: 提交前自动同步 lockfile + 类型检查
+
+echo "🔍 Pre-commit checks..."
+
+# 若 package.json 有变更，同步 lockfile 避免 Vercel ERR_PNPM_OUTDATED_LOCKFILE
+if git diff --cached --name-only | grep -q "package.json"; then
+  echo "📦 Syncing lockfile..."
+  pnpm install --lockfile-only
+  git add pnpm-lock.yaml 2>/dev/null || true
+fi
+
+# TypeScript 类型检查（monorepo 使用 turbo type-check）
+pnpm type-check || exit 1
+
+echo "✅ Checks passed!"

@@ -14,7 +14,9 @@
         "prepare": "husky install",
         "check": "pnpm type-check && pnpm build",
         "check-before-push": "pnpm type-check && pnpm build && pnpm lint",
-        "quick-check": "pnpm type-check"
+        "quick-check": "pnpm type-check",
+        "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
+        "deploy:fix": "./scripts/auto-fix.sh"
     },
     "devDependencies": {
         "husky": "^9.1.7",
