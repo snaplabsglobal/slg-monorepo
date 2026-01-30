@@ -16,6 +16,7 @@ import {
   ZoomInIcon,
   SaveIcon,
 } from './icons';
+import { formatDateForInput } from '@/app/lib/utils/date';
 
 // ========================================
 // Transaction Details Modal
@@ -233,7 +234,7 @@ export function TransactionDetailsModal({
 
                     <DetailField
                       label="Transaction Date"
-                      value={transaction.transaction_date}
+                      value={formatDateForInput(transaction.transaction_date)}
                       editing={editing}
                       type="date"
                       onChange={(value) => setFormData({ ...formData, transaction_date: value })}

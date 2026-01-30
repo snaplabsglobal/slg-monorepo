@@ -4,6 +4,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 export interface ReceiptAnalysisResult {
   vendor_name: string | null
   vendor_alias: string | null
+  /** Branch/location from receipt text (e.g. Coquitlam, Burnaby). Prioritize for vendor_name. */
+  sub_location: string | null
+  /** Store phone on receipt (e.g. 604-464-5522). Used to bind to branch; more accurate than text. */
+  store_phone: string | null
   transaction_date: string | null
   currency: string
   subtotal_cents: number
@@ -50,7 +54,7 @@ export async function analyzeReceiptWithGemini(
   const buffer = Buffer.from(imageBuffer)
   const imageBase64 = buffer.toString('base64')
 
-  const prompt = `You are a professional Canadian accountant-grade receipt analysis engine specializing in British Columbia construction and renovation businesses.
+  const prompt = `You are a professional Canadian accountant-grade receipt analysis engine specializing in British Columbia construction and renovation businesses ("溫哥華最懂裝修師傅").
 
 Extract financial data from this receipt image with absolute precision for tax filing (CRA compliance) and GST Input Tax Credit (ITC) recovery.
 
@@ -58,6 +62,8 @@ Return ONLY a valid JSON object (no markdown, no code blocks) with this structur
 {
   "vendor_name": "string | null",
   "vendor_alias": "string | null",
+  "sub_location": "string | null",
+  "store_phone": "string | null",
   "transaction_date": "YYYY-MM-DD | null",
   "currency": "CAD | USD",
   "subtotal_cents": 0,
@@ -87,6 +93,10 @@ CRITICAL RULES:
 - confidence.overall < 0.9 → needs_review: true
 - Category: Food & Dining, Transportation, Office Supplies, Utilities, Entertainment, Healthcare, Travel, Shopping, Professional Services, Other
 
+SUB_LOCATION (branch name): If the receipt shows a branch/location (e.g. "Coquitlam", "Burnaby", "Surrey", "Vancouver", store # or address area), put it in sub_location. This is used to identify which branch; prefer storing branch name in vendor_name when present.
+
+STORE_PHONE: Extract the store or business phone number from the receipt (e.g. 604-464-5522, (604) 555-1234). Use digits-only or E.164-like string. Phone binding is more accurate than text for locking to a specific branch.
+
 Now analyze the receipt image:`
 
   try {
@@ -113,6 +123,8 @@ Now analyze the receipt image:`
     return {
       vendor_name: parsed.vendor_name?.trim?.() || null,
       vendor_alias: parsed.vendor_alias?.trim?.() || null,
+      sub_location: parsed.sub_location?.trim?.() || null,
+      store_phone: parsed.store_phone?.trim?.() || null,
       transaction_date: parsed.transaction_date || null,
       currency: (parsed.currency || 'CAD').toUpperCase(),
       subtotal_cents: parseInt(parsed.subtotal_cents) || 0,

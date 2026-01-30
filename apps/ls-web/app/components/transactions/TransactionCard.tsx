@@ -24,6 +24,7 @@ import type { Transaction } from './TransactionList'
 import { StatusBadge } from './StatusBadge'
 import { deriveAsyncStatus, STATUS_CONFIG } from './status'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
+import { formatDateOnly } from '@/app/lib/utils/format'
 
 export interface TransactionCardProps {
   transaction: Transaction
@@ -276,7 +277,7 @@ export function TransactionCard({
               })()}
             </div>
             <div className="flex items-center gap-4 text-sm text-gray-600">
-              <span>{new Date(transaction.transaction_date).toLocaleDateString()}</span>
+              <span>{formatDateOnly(transaction.transaction_date)}</span>
               <span className="text-xs text-gray-500">{statusCfg.description}</span>
             </div>
             {tags.length > 0 && (

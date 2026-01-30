@@ -8,6 +8,7 @@ import Image from 'next/image'
 import type { Transaction } from './TransactionList'
 import { StatusBadge } from './StatusBadge'
 import { deriveAsyncStatus } from './status'
+import { formatDateOnly } from '@/app/lib/utils/format'
 
 export interface TransactionVisualCardProps {
   transaction: Transaction
@@ -28,11 +29,6 @@ const BuildingIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
   </svg>
 )
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 function formatAmount(amount: number, currency: string = 'CAD'): string {
   return new Intl.NumberFormat('en-CA', {
@@ -110,7 +106,7 @@ export function TransactionVisualCard({ transaction, onClick, priority }: Transa
               {/* 日期 */}
               <div className="flex items-center gap-1">
                 <ClockIcon />
-                <span>{formatDate(transaction.transaction_date)}</span>
+                <span>{formatDateOnly(transaction.transaction_date)}</span>
               </div>
               
               {/* 项目 */}

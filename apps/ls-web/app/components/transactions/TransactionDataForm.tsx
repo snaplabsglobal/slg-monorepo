@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { DeletedInfoBanner } from './DeletedInfoBanner'
 import {
@@ -8,6 +8,7 @@ import {
   yearsFromNow,
   recordCorrection,
 } from '@/app/lib/ml-correction'
+import { formatDateForInput } from '@/app/lib/utils/date'
 
 export interface TransactionDetail {
   id: string
@@ -41,13 +42,18 @@ interface TransactionDataFormProps {
 export function TransactionDataForm({ transaction, onSave, onConfirm, saving, readOnly = false }: TransactionDataFormProps) {
   const [editing, setEditing] = useState(false)
   const [vendorName, setVendorName] = useState(transaction.vendor_name || '')
-  const [date, setDate] = useState(transaction.transaction_date)
+  const [date, setDate] = useState(() => formatDateForInput(transaction.transaction_date))
   const [totalAmount, setTotalAmount] = useState(String(transaction.total_amount ?? 0))
   const [categoryUser, setCategoryUser] = useState(transaction.category_user || '')
   const [mlRecorded, setMlRecorded] = useState(false)
   const [patternDialogOpen, setPatternDialogOpen] = useState(false)
   const [patternVendor, setPatternVendor] = useState<string | null>(null)
   const [patternIsDefaultRule, setPatternIsDefaultRule] = useState(false)
+
+  // Sync date when transaction changes (e.g. open another transaction); use formatDateForInput to avoid timezone -1 day
+  useEffect(() => {
+    setDate(formatDateForInput(transaction.transaction_date))
+  }, [transaction.id, transaction.transaction_date])
 
   const isRefund = Boolean(transaction?.raw_data?.is_refund)
   const suspiciousDate = useMemo(() => isSuspiciousDate(date), [date])
@@ -102,7 +108,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
               onClick={() => {
                 setEditing(false)
                 setVendorName(transaction.vendor_name || '')
-                setDate(transaction.transaction_date)
+                setDate(formatDateForInput(transaction.transaction_date))
                 setTotalAmount(String(transaction.total_amount ?? 0))
                 setCategoryUser(transaction.category_user || '')
               }}

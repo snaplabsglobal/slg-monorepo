@@ -20,6 +20,7 @@ import {
 } from './icons';
 import { TransactionDetailsModal } from './TransactionDetailsModal';
 import { BatchOperationsBar } from './BatchOperationsBar';
+import { formatDateOnly } from '@/app/lib/utils/format';
 
 // ========================================
 // Types
@@ -601,11 +602,7 @@ function TransactionRow({ transaction, selected, onSelect, onApprove, onReject, 
               <div className="flex items-center gap-4 text-sm text-slate-600">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="w-4 h-4" />
-                  {new Date(transaction.transaction_date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
+                  {formatDateOnly(transaction.transaction_date)}
                 </span>
                 <span>•</span>
                 <span>{transaction.category_user || 'Uncategorized'}</span>

@@ -50,6 +50,13 @@ function inferMimeType(url: string) {
   return 'image/jpeg'
 }
 
+/** Normalize phone to digits for lookup (e.g. 604-464-5522 -> 6044645522). */
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone || typeof phone !== 'string') return null
+  const digits = phone.replace(/\D/g, '')
+  return digits.length >= 10 ? digits : null
+}
+
 export async function POST(_request: NextRequest, context: RouteContext) {
   const startTime = Date.now()
   const { id } = await context.params
@@ -153,6 +160,30 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       )
     }
 
+    // Sub_location + phone binding (COO: 分店名優先 + 電話綁定)
+    const phoneNormalized = normalizePhone(analysis.store_phone)
+    let subLocationFinal: string | null = null
+    if (phoneNormalized && (membership as any)?.organization_id) {
+      const { data: phoneBinding } = await (supabase as any)
+        .from('vendor_branch_phones')
+        .select('sub_location, vendor_name')
+        .eq('organization_id', (membership as any).organization_id)
+        .eq('phone_normalized', phoneNormalized)
+        .maybeSingle()
+      if (phoneBinding?.sub_location) {
+        subLocationFinal = phoneBinding.sub_location
+        console.log('[Analyze Receipt] Phone binding:', { phone: phoneNormalized, sub_location: subLocationFinal })
+      }
+    }
+    if (subLocationFinal == null && analysis.sub_location?.trim()) {
+      subLocationFinal = analysis.sub_location.trim()
+    }
+    const vendorNameBase = (analysis.vendor_name || '').trim()
+    const vendorNameFinal =
+      vendorNameBase && subLocationFinal
+        ? `${vendorNameBase} ${subLocationFinal}`.trim()
+        : vendorNameBase || null
+
     // User-driven ML: apply learned/preset date rules (ELEGANT_USER_DRIVEN_ML)
     let transactionDateForUpdate = analysis.transaction_date || current.transaction_date
     let needsReviewFromRule = false
@@ -217,16 +248,17 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     let isSuspectedDuplicate = false
     let duplicateDetails: any[] = []
     
-    if (analysis.vendor_name && totalCents > 0) {
+    const vendorForDup = vendorNameFinal ?? analysis.vendor_name
+    if (vendorForDup && totalCents > 0) {
       const transactionDate = analysis.transaction_date || current.transaction_date
       const totalAmount = totalCents / 100
-      
-      // Exact match: vendor + amount + date
+
+      // Exact match: vendor + amount + date (vendor includes branch when present)
       const { data: exactMatches } = await (supabase as any)
         .from('transactions')
         .select('id, vendor_name, total_amount, transaction_date, status')
         .eq('organization_id', (membership as any).organization_id)
-        .eq('vendor_name', analysis.vendor_name)
+        .eq('vendor_name', vendorForDup)
         .eq('total_amount', totalAmount)
         .eq('transaction_date', transactionDate)
         .neq('id', id)
@@ -245,7 +277,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .limit(10)
 
       // Check vendor name similarity (simple string similarity)
-      const vendorLower = analysis.vendor_name.toLowerCase()
+      const vendorLower = (vendorForDup || '').toLowerCase()
       const similarVendors = (fuzzyMatches || []).filter((d: any) => {
         const dVendorLower = (d.vendor_name || '').toLowerCase()
         // Check if vendor names are similar (contain common words or are very similar)
@@ -331,7 +363,8 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     }
 
     const updates: Record<string, any> = {
-      vendor_name: analysis.vendor_name,
+      vendor_name: vendorNameFinal ?? analysis.vendor_name,
+      sub_location: subLocationFinal ?? undefined,
       transaction_date: analysis.transaction_date || current.transaction_date,
       currency: analysis.currency || current.currency || 'CAD',
       // Ensure total_amount is always positive (use Math.abs to be safe)
@@ -384,7 +417,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       console.warn('[Analyze Receipt] is_suspected_duplicate column not found, retrying without it')
       const updatesWithoutDuplicate = { ...updates }
       delete updatesWithoutDuplicate.is_suspected_duplicate
-      
+
       const { data: txRetry, error: errRetry } = await (supabase as any)
         .from('transactions')
         .update(updatesWithoutDuplicate)
@@ -392,7 +425,25 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .eq('organization_id', (membership as any).organization_id)
         .select('*')
         .maybeSingle()
-      
+
+      updatedTx = txRetry
+      updateError = errRetry
+    }
+
+    // If error is due to missing sub_location column, retry without it
+    if (updateError && updateError.message?.includes('sub_location')) {
+      console.warn('[Analyze Receipt] sub_location column not found, retrying without it')
+      const updatesWithoutSubLocation = { ...updates }
+      delete updatesWithoutSubLocation.sub_location
+
+      const { data: txRetry, error: errRetry } = await (supabase as any)
+        .from('transactions')
+        .update(updatesWithoutSubLocation)
+        .eq('id', id)
+        .eq('organization_id', (membership as any).organization_id)
+        .select('*')
+        .maybeSingle()
+
       updatedTx = txRetry
       updateError = errRetry
     }
@@ -460,6 +511,31 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       }
     } catch {
       // ignore items failures
+    }
+
+    // Learn phone -> branch binding for next time (COO: 電話綁定)
+    if (
+      phoneNormalized &&
+      subLocationFinal &&
+      vendorNameBase &&
+      (membership as any)?.organization_id
+    ) {
+      try {
+        await (supabase as any).from('vendor_branch_phones').upsert(
+          {
+            organization_id: (membership as any).organization_id,
+            vendor_name: vendorNameBase,
+            phone_normalized: phoneNormalized,
+            sub_location: subLocationFinal,
+          },
+          {
+            onConflict: 'organization_id,phone_normalized',
+            ignoreDuplicates: false,
+          }
+        )
+      } catch {
+        // ignore (table may not exist yet)
+      }
     }
 
     // Log to ML training data (best-effort)

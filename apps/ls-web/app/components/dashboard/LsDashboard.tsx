@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ActionAlerts, type ActionAlert } from './ActionAlerts'
 import { ProjectBreakdownPlaceholder } from './ProjectBreakdownPlaceholder'
+import { formatDateOnly } from '@/app/lib/utils/format'
 
 type DashboardStats = {
   totalTransactions: number
@@ -260,7 +261,7 @@ export function LsDashboard() {
                   </p>
                   <p className="text-sm text-gray-600">
                     {tx.transaction_date 
-                      ? new Date(tx.transaction_date).toLocaleDateString() 
+                      ? formatDateOnly(tx.transaction_date) 
                       : 'No date'} · {tx.status || 'pending'}
                   </p>
                 </div>

@@ -6,6 +6,7 @@ import { TransactionCard } from './TransactionCard'
 import { TransactionVisualCard } from './TransactionVisualCard'
 import { ResponsiveDetailPanel } from './ResponsiveDetailPanel'
 import { useRealtimeTransactions } from '@/app/hooks/useRealtimeTransactions'
+import { useHasMounted } from '@/app/hooks/useHasMounted'
 import { ViewToggle, type ViewMode } from './ViewToggle'
 import { FiltersBar, type Filters } from './FiltersBar'
 import { deriveAsyncStatus } from './status'
@@ -97,6 +98,17 @@ export function TransactionList({
   }
 
   const orderedIds = useMemo(() => transactions.map((t) => t.id), [transactions])
+  const hasMounted = useHasMounted()
+
+  // COO: Avoid React #418 hydration mismatch — render list content only after client mount.
+  // Server and first client paint both show loading; then we show the list. No date/text mismatch.
+  if (!hasMounted) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500 mb-4">Loading transactions...</p>
+      </div>
+    )
+  }
 
   if (isLoading && transactions.length === 0) {
     return (
