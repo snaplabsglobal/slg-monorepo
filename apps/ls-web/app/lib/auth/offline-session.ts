@@ -1,9 +1,10 @@
 /**
  * CTO#1: Offline session check. Do not redirect to login when offline.
  * Use from client components only (getSession + navigator.onLine).
+ * Uses supabase-browser (createClient + localStorage) so we never import @slo/snap-auth server.
  */
 
-import { createBrowserClient } from '@slo/snap-auth'
+import { createSupabaseBrowser } from '@/app/lib/supabase-browser'
 
 export type OfflineSessionResult =
   | { status: 'valid'; session: { access_token: string; expires_at?: number } }
@@ -17,7 +18,7 @@ export async function checkOfflineSession(): Promise<OfflineSessionResult> {
     return { status: 'session_check_error', redirect: '/login' }
   }
 
-  const supabase = createBrowserClient()
+  const supabase = createSupabaseBrowser()
 
   try {
     const {
