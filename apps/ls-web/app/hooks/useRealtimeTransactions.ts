@@ -201,6 +201,8 @@ export function useRealtimeTransactions(organizationId?: string) {
         } else if (status === 'TIMED_OUT') {
           hadChannelErrorRef.current = true
           console.error('[RealtimeTransactions] ⏱️ Subscription timed out')
+          // We do NOT clear transactions or clearInterval(refreshInterval): local state and
+          // manual polling backup keep the UI working; Realtime may reconnect on next effect.
         } else if (status === 'CLOSED') {
           // Skip redundant warn when close is due to a prior error, or during our own cleanup
           if (!isCleaningUpRef.current && !hadChannelErrorRef.current) {

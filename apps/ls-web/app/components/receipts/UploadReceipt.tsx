@@ -11,6 +11,7 @@ import {
   ImageIcon,
 } from './icons';
 import { ReceiptEdgeCropModal } from './ReceiptEdgeCropModal';
+import { useHasMounted } from '@/app/hooks/useHasMounted';
 
 interface UploadReceiptProps {
   onUploadSuccess?: (transactionId: string) => void;
@@ -30,8 +31,44 @@ type QueueItem = {
 
 type ToastItem = { id: string; type: 'success' | 'error' | 'info'; message: string }
 
+/** Call analyze API with retry (max 2 retries on 500). Returns result so next analyze can start only after this one finishes. */
+async function analyzeWithRetry(
+  transactionId: string,
+  maxRetries: number = 2
+): Promise<{ success: boolean; transaction?: unknown }> {
+  let lastRes: Response | null = null
+  let lastError: unknown = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`/api/receipts/${transactionId}/analyze`, { method: 'POST' })
+      lastRes = res
+      if (res.ok) {
+        const result = await res.json().catch(() => ({}))
+        return { success: !!result?.success, transaction: result?.transaction }
+      }
+      if (res.status === 500 && attempt < maxRetries) {
+        console.warn(`[UploadReceipt] Analyze 500 for ${transactionId}, retry ${attempt + 1}/${maxRetries}`)
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+        continue
+      }
+      const errorData = await res.json().catch(() => ({}))
+      console.error('[UploadReceipt] Analyze failed:', res.status, errorData)
+      return { success: false }
+    } catch (err) {
+      console.error('[UploadReceipt] Analyze error:', err)
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+        continue
+      }
+      return { success: false }
+    }
+  }
+  return { success: false }
+}
+
 export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadReceiptProps) {
   const router = useRouter();
+  const hasMounted = useHasMounted();
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -306,44 +343,18 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
 
       if (onUploadSuccess) onUploadSuccess(transactionId)
 
-      // fire-and-forget analyze (with error logging)
-      console.log('[UploadReceipt] Triggering analyze for transaction:', transactionId)
-      fetch(`/api/receipts/${transactionId}/analyze`, { method: 'POST' })
-        .then(async (res) => {
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}))
-            console.error('[UploadReceipt] Analyze failed:', {
-              status: res.status,
-              statusText: res.statusText,
-              error: errorData,
-            })
-          } else {
-            const result = await res.json().catch(() => ({}))
-            console.log('[UploadReceipt] Analyze completed successfully:', {
-              transactionId: transactionId,
-              status: result.status,
-              vendor_name: result.transaction?.vendor_name,
-              success: result.success,
-            })
-            
-            // CRITICAL: After analyze completes, trigger a custom event
-            // This allows components to manually refresh if Realtime is delayed
-            // The Realtime hook should receive the UPDATE event automatically, but this is a fallback
-            if (result.success && result.transaction) {
-              // Dispatch a custom event that components can listen to
-              window.dispatchEvent(new CustomEvent('transaction-analyzed', {
-                detail: {
-                  transactionId: transactionId,
-                  transaction: result.transaction,
-                }
-              }))
-              console.log('[UploadReceipt] Dispatched transaction-analyzed event')
-            }
-          }
-        })
-        .catch((err) => {
-          console.error('[UploadReceipt] Analyze error:', err)
-        })
+      // Sequential analyze: wait for this item's analyze to finish (with retry) before processing next
+      console.log('[UploadReceipt] Starting analyze for transaction:', transactionId)
+      const analyzeResult = await analyzeWithRetry(transactionId, 2)
+      if (analyzeResult.success && analyzeResult.transaction) {
+        window.dispatchEvent(
+          new CustomEvent('transaction-analyzed', {
+            detail: { transactionId, transaction: analyzeResult.transaction },
+          })
+        )
+      }
+      // Process next queued item only after this analyze finishes or fails
+      setTimeout(() => void processQueue(), 0)
     } catch (err: any) {
       clearTimeout(timeoutId) // Clear timeout on error
       
@@ -592,7 +603,7 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
         </div>
       )}
 
-      {queue.length > 0 && (
+      {hasMounted && queue.length > 0 && (
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-gray-900">上传队列</h4>
