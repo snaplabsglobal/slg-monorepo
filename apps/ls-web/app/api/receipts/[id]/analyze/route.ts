@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
+import { createClient } from '@supabase/supabase-js'
 import { analyzeReceiptWithGemini } from '../../_gemini'
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -57,32 +58,63 @@ function normalizePhone(phone: string | null | undefined): string | null {
   return digits.length >= 10 ? digits : null
 }
 
-export async function POST(_request: NextRequest, context: RouteContext) {
+export async function POST(request: NextRequest, context: RouteContext) {
   const startTime = Date.now()
   const { id } = await context.params
   console.log('[Analyze Receipt] Request received at:', new Date().toISOString())
-  
+
+  const cronSecret = process.env.CRON_SECRET
+  const isCron = cronSecret && request.headers.get('Authorization') === `Bearer ${cronSecret}`
+
   try {
     console.log('[Analyze Receipt] Processing transaction:', id)
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    let supabase: any
+    let organizationId: string
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (isCron) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      if (!url || !serviceKey) {
+        return NextResponse.json({ error: 'Missing Supabase env' }, { status: 500 })
+      }
+      supabase = createClient(url, serviceKey)
+      const { data: pending } = await (supabase as any)
+        .from('pending_analysis')
+        .select('organization_id')
+        .eq('transaction_id', id)
+        .maybeSingle()
+      organizationId = (pending as any)?.organization_id
+      if (!organizationId) {
+        const { data: tx } = await (supabase as any)
+          .from('transactions')
+          .select('organization_id')
+          .eq('id', id)
+          .maybeSingle()
+        organizationId = (tx as any)?.organization_id
+      }
+      if (!organizationId) {
+        return NextResponse.json({ error: 'Transaction or org not found' }, { status: 404 })
+      }
+    } else {
+      supabase = await createServerClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-    // NOTE: Supabase generated `Database` types may lag behind migrations in this repo.
-    // Cast to `any` in API routes to avoid `never` inference breaking builds.
-    const { data: membership } = await (supabase as any)
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
 
-    if (!(membership as any)?.organization_id) {
-      return NextResponse.json({ error: 'No organization' }, { status: 400 })
+      const { data: membership } = await (supabase as any)
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!(membership as any)?.organization_id) {
+        return NextResponse.json({ error: 'No organization' }, { status: 400 })
+      }
+      organizationId = (membership as any).organization_id
     }
 
     // Load current transaction
@@ -90,7 +122,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       .from('transactions')
       .select('*')
       .eq('id', id)
-      .eq('organization_id', (membership as any).organization_id)
+      .eq('organization_id', organizationId)
       .maybeSingle()
 
     if (currentError) {
@@ -153,7 +185,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
       return NextResponse.json(
         { error: 'AI analysis failed', message: geminiError?.message || 'Gemini API error' },
         { status: 500 }
@@ -163,11 +195,11 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     // Sub_location + phone binding (COO: 分店名優先 + 電話綁定)
     const phoneNormalized = normalizePhone(analysis.store_phone)
     let subLocationFinal: string | null = null
-    if (phoneNormalized && (membership as any)?.organization_id) {
+    if (phoneNormalized && organizationId) {
       const { data: phoneBinding } = await (supabase as any)
         .from('vendor_branch_phones')
         .select('sub_location, vendor_name')
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .eq('phone_normalized', phoneNormalized)
         .maybeSingle()
       if (phoneBinding?.sub_location) {
@@ -207,11 +239,11 @@ export async function POST(_request: NextRequest, context: RouteContext) {
           }
         }
       }
-      if (!preset && (membership as any)?.organization_id) {
+      if (!preset && organizationId) {
         const { data: orgPattern } = await (supabase as any)
           .from('vendor_date_patterns')
           .select('is_default_rule, date_format, year_century')
-          .eq('organization_id', (membership as any).organization_id)
+          .eq('organization_id', organizationId)
           .eq('vendor_name', normalizedVendor)
           .maybeSingle()
         if (orgPattern?.is_default_rule && orgPattern?.date_format) {
@@ -257,7 +289,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const { data: exactMatches } = await (supabase as any)
         .from('transactions')
         .select('id, vendor_name, total_amount, transaction_date, status')
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .eq('vendor_name', vendorForDup)
         .eq('total_amount', totalAmount)
         .eq('transaction_date', transactionDate)
@@ -269,7 +301,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const { data: fuzzyMatches } = await (supabase as any)
         .from('transactions')
         .select('id, vendor_name, total_amount, transaction_date, status')
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .eq('total_amount', totalAmount)
         .eq('transaction_date', transactionDate)
         .neq('id', id)
@@ -405,7 +437,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       .from('transactions')
       .update(updates)
       .eq('id', id)
-      .eq('organization_id', (membership as any).organization_id)
+      .eq('organization_id', organizationId)
       .select('*')
       .maybeSingle()
     
@@ -422,7 +454,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .from('transactions')
         .update(updatesWithoutDuplicate)
         .eq('id', id)
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .select('*')
         .maybeSingle()
 
@@ -440,7 +472,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .from('transactions')
         .update(updatesWithoutSubLocation)
         .eq('id', id)
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .select('*')
         .maybeSingle()
 
@@ -460,7 +492,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .from('transactions')
         .select('*')
         .eq('id', id)
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
         .single()
       
       if (fetchError || !fetchedTx) {
@@ -496,12 +528,12 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         .from('transaction_items')
         .delete()
         .eq('transaction_id', id)
-        .eq('organization_id', (membership as any).organization_id)
+        .eq('organization_id', organizationId)
 
       if (analysis.items && analysis.items.length > 0) {
         const items = analysis.items.map((item: any) => ({
           transaction_id: id,
-          organization_id: (membership as any).organization_id,
+          organization_id: organizationId,
           description: item.description,
           quantity: item.quantity,
           unit_price: Math.abs(item.price_cents || 0) / 100,
@@ -518,12 +550,12 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       phoneNormalized &&
       subLocationFinal &&
       vendorNameBase &&
-      (membership as any)?.organization_id
+      organizationId
     ) {
       try {
         await (supabase as any).from('vendor_branch_phones').upsert(
           {
-            organization_id: (membership as any).organization_id,
+            organization_id: organizationId,
             vendor_name: vendorNameBase,
             phone_normalized: phoneNormalized,
             sub_location: subLocationFinal,
@@ -541,7 +573,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     // Log to ML training data (best-effort)
     try {
       await (supabase as any).from('ml_training_data').insert({
-        organization_id: (membership as any).organization_id,
+        organization_id: organizationId,
         transaction_id: id,
         input_data: {
           image_url: attachmentUrl,

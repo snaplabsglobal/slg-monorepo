@@ -10,8 +10,29 @@ const nextConfig = {
     // Explicitly disable Turbopack by setting empty config
     turbopack: {},
     // Prevent CDN/browser from caching dynamic pages (dev.ledgersnap.app updates)
+    // PWA + CSP (CTO#1): security headers for all routes
     async headers() {
+        const securityHeaders = [
+            {
+                key: 'Content-Security-Policy',
+                value: [
+                    "default-src 'self'",
+                    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net",
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                    "img-src 'self' data: blob: https:",
+                    "font-src 'self' https://fonts.gstatic.com",
+                    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "object-src 'none'",
+                ].join('; '),
+            },
+            { key: 'X-Frame-Options', value: 'DENY' },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ]
         return [
+            { source: '/(.*)', headers: securityHeaders },
             {
                 source: '/dashboard/:path*',
                 headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
@@ -23,6 +44,13 @@ const nextConfig = {
             {
                 source: '/login',
                 headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+            },
+            {
+                source: '/sw.js',
+                headers: [
+                    { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+                    { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+                ],
             },
         ]
     },

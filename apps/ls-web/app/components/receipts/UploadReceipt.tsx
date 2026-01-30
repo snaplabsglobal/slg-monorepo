@@ -12,6 +12,9 @@ import {
 } from './icons';
 import { ReceiptEdgeCropModal } from './ReceiptEdgeCropModal';
 import { useHasMounted } from '@/app/hooks/useHasMounted';
+import { enqueueReceipt } from '@/app/lib/upload-queue';
+import { putBlob, deleteItem as deleteQueueItem } from '@/app/lib/upload-queue/store';
+import { useUploadQueue } from '@/app/hooks/useUploadQueue';
 
 interface UploadReceiptProps {
   onUploadSuccess?: (transactionId: string) => void;
@@ -31,44 +34,27 @@ type QueueItem = {
 
 type ToastItem = { id: string; type: 'success' | 'error' | 'info'; message: string }
 
-/** Call analyze API with retry (max 2 retries on 500). Returns result so next analyze can start only after this one finishes. */
-async function analyzeWithRetry(
-  transactionId: string,
-  maxRetries: number = 2
-): Promise<{ success: boolean; transaction?: unknown }> {
-  let lastRes: Response | null = null
-  let lastError: unknown = null
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(`/api/receipts/${transactionId}/analyze`, { method: 'POST' })
-      lastRes = res
-      if (res.ok) {
-        const result = await res.json().catch(() => ({}))
-        return { success: !!result?.success, transaction: result?.transaction }
-      }
-      if (res.status === 500 && attempt < maxRetries) {
-        console.warn(`[UploadReceipt] Analyze 500 for ${transactionId}, retry ${attempt + 1}/${maxRetries}`)
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-        continue
-      }
-      const errorData = await res.json().catch(() => ({}))
-      console.error('[UploadReceipt] Analyze failed:', res.status, errorData)
-      return { success: false }
-    } catch (err) {
-      console.error('[UploadReceipt] Analyze error:', err)
-      if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-        continue
-      }
-      return { success: false }
-    }
-  }
-  return { success: false }
+/** Map IDB queue status to UI status */
+function mapIdbStatusToUi(
+  status: string
+): 'queued' | 'uploading' | 'received' | 'error' | 'done' {
+  if (status === 'queued') return 'queued'
+  if (status === 'uploading' || status === 'analyzing') return 'uploading'
+  if (status === 'received') return 'received'
+  if (
+    status === 'failed_retryable' ||
+    status === 'failed_fatal' ||
+    status === 'skipped_duplicate'
+  )
+    return 'error'
+  if (status === 'done') return 'done'
+  return 'queued'
 }
 
 export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadReceiptProps) {
   const router = useRouter();
   const hasMounted = useHasMounted();
+  const { items: idbItems } = useUploadQueue(1500)
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -92,10 +78,32 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
     }, 2200)
   }, [])
 
+  // Sync status from IndexedDB queue (offline upload buffer) into local UI queue
+  useEffect(() => {
+    if (idbItems.length === 0) return
+    setQueue((prev) => {
+      let next = prev
+      for (const idb of idbItems) {
+        const uiStatus = mapIdbStatusToUi(idb.status)
+        if (uiStatus === 'done' || idb.status === 'skipped_duplicate') {
+          next = next.filter((q) => q.id !== idb.id)
+          continue
+        }
+        const idx = next.findIndex((q) => q.id === idb.id)
+        if (idx === -1) continue
+        const cur = next[idx]
+        if (cur.status !== uiStatus || cur.message !== idb.message || cur.transactionId !== idb.transactionId) {
+          next = next.slice()
+          next[idx] = { ...cur, status: uiStatus, message: idb.message, transactionId: idb.transactionId }
+        }
+      }
+      return next
+    })
+  }, [idbItems])
+
   // Cleanup on unmount: revoke preview URLs
   useEffect(() => {
     return () => {
-      // cleanup previews
       queue.forEach((q) => {
         try {
           URL.revokeObjectURL(q.previewUrl)
@@ -166,241 +174,49 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
     return null
   }
 
-  const enqueueFiles = (files: File[]) => {
-    console.log('[UploadReceipt] enqueueFiles called with', files.length, 'files')
-    const now = Date.now()
-    const items: QueueItem[] = []
-    for (const file of files) {
-      const msg = validateFile(file)
-      if (msg) {
-        console.warn('[UploadReceipt] File validation failed:', msg, file.name)
-        setError(msg)
-        pushToast({ type: 'error', message: msg })
-        continue
-      }
-      const itemId = `q-${now}-${Math.random().toString(36).slice(2)}`
-      items.push({
-        id: itemId,
-        file,
-        previewUrl: URL.createObjectURL(file),
-        status: 'queued',
-        createdAt: Date.now(),
-      })
-      console.log('[UploadReceipt] Enqueued file:', { id: itemId, name: file.name, size: file.size })
-    }
-    if (items.length > 0) {
-      console.log('[UploadReceipt] Adding', items.length, 'items to queue')
-      setQueue((prev) => {
-        const newQueue = [...items, ...prev]
-        console.log('[UploadReceipt] New queue length:', newQueue.length)
-        return newQueue
-      })
-      setError(null)
-    } else {
-      console.warn('[UploadReceipt] No valid files to enqueue')
-    }
-  }
-
-  const handleFiles = (files: File[]) => {
-    enqueueFiles(files)
-    // reset input so selecting the same file again works
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  // Process queue: use functional updates to avoid stale closure
-  // CRITICAL: Always ensure state is reset in finally block to prevent forever spinners
-  const processQueue = useCallback(async () => {
-    console.log('[UploadReceipt] processQueue called')
-    
-    // CRITICAL: First, get the current queue state and find the next item BEFORE updating state
-    // This avoids the closure issue where next/currentItemId are lost
-    let next: QueueItem | undefined
-    let currentItemId: string | undefined
-    
-    // Use a functional update to both read and update in one go
-    const updateResult = await new Promise<{ next: QueueItem | undefined; updated: boolean }>((resolve) => {
-      setQueue((prev) => {
-        console.log('[UploadReceipt] processQueue: current queue state:', prev.map(q => ({ id: q.id, status: q.status, name: q.file.name })))
-        
-        // Check if already processing
-        const alreadyUploading = prev.some((q) => q.status === 'uploading')
-        if (alreadyUploading) {
-          console.log('[UploadReceipt] processQueue: already uploading, skipping')
-          resolve({ next: undefined, updated: false })
-          return prev
+  const enqueueFiles = useCallback(
+    async (files: File[]) => {
+      const items: QueueItem[] = []
+      for (const file of files) {
+        const msg = validateFile(file)
+        if (msg) {
+          setError(msg)
+          pushToast({ type: 'error', message: msg })
+          continue
         }
-        
-        const queued = prev.filter((q) => q.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)
-        console.log('[UploadReceipt] processQueue: queued items:', queued.length)
-        
-        if (queued.length === 0) {
-          console.log('[UploadReceipt] processQueue: no queued items found')
-          resolve({ next: undefined, updated: false })
-          return prev
-        }
-        
-        const selected = queued[0]
-        console.log('[UploadReceipt] processQueue: selected next item:', { id: selected.id, name: selected.file.name })
-        
-        // Resolve with the selected item BEFORE returning the updated state
-        resolve({ next: selected, updated: true })
-        
-        // Update status to uploading
-        return prev.map((q) => (q.id === selected.id ? { ...q, status: 'uploading' } : q))
-      })
-    })
-    
-    next = updateResult.next
-    currentItemId = next?.id
-    
-    if (!next || !currentItemId) {
-      console.log('[UploadReceipt] processQueue: early return - no next item', { hasNext: !!next, hasId: !!currentItemId })
-      return
-    }
-    
-    console.log('[UploadReceipt] processQueue: proceeding with upload', { id: currentItemId, name: next.file.name })
-
-    // CRITICAL: Add timeout to prevent forever spinners (30 seconds max)
-    const timeoutId = setTimeout(() => {
-      console.error('[UploadReceipt] Upload timeout after 30s for item:', currentItemId)
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.id === currentItemId
-            ? { ...q, status: 'error', message: '上传超时，请重试' }
-            : q
-        )
-      )
-      pushToast({ type: 'error', message: '⚠️ 上传超时，请重试' })
-    }, 30000) // 30 second timeout
-
-    // Use AbortController for request cancellation
-    const abortController = new AbortController()
-
-    try {
-      // Generate client_id for idempotency (Layer 2)
-      const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      
-      console.log('[UploadReceipt] Starting upload for item:', {
-        id: currentItemId,
-        fileName: next.file.name,
-        fileSize: next.file.size,
-        clientId,
-      })
-      
-      const formData = new FormData()
-      formData.append('file', next.file)
-      formData.append('client_id', clientId) // Add client_id for idempotency
-      if (projectId) formData.append('projectId', projectId)
-
-      console.log('[UploadReceipt] Sending request to /api/receipts/quick-upload')
-      const response = await fetch('/api/receipts/quick-upload', {
-        method: 'POST',
-        body: formData,
-        signal: abortController.signal, // Allow cancellation
-      })
-
-      console.log('[UploadReceipt] Received response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      })
-
-      clearTimeout(timeoutId) // Clear timeout on success
-
-      const json = await response.json().catch(() => ({}))
-      
-      // Handle duplicate detection responses
-      if (response.status === 409 && json?.error === 'DUPLICATE_IMAGE') {
-        const msg = json?.message || '这张收据已经上传过了'
-        pushToast({ type: 'error', message: `⚠️ ${msg}` })
-        setQueue((prev) =>
-          prev.map((q) =>
-            q.id === currentItemId ? { ...q, status: 'error', message: msg } : q
-          )
-        )
-        return // Skip this item, don't throw
-      }
-      
-      if (!response.ok || !json?.success || !json?.transaction?.id) {
-        const msg = json?.message || json?.error || 'Upload failed'
-        throw new Error(msg)
-      }
-      
-      // Handle idempotent duplicate (same client_id)
-      if (json.duplicate) {
-        console.log('[UploadReceipt] Idempotent duplicate detected, using existing transaction:', json.transaction.id)
-        pushToast({ type: 'info', message: '✅ 已收到（幂等性检查通过）' })
-      }
-
-      const transactionId = String(json.transaction.id)
-      pushToast({ type: 'success', message: '✅ 已收到，正在后台识别' })
-
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.id === currentItemId ? { ...q, status: 'received', transactionId } : q
-        )
-      )
-
-      if (onUploadSuccess) onUploadSuccess(transactionId)
-
-      // Sequential analyze: wait for this item's analyze to finish (with retry) before processing next
-      console.log('[UploadReceipt] Starting analyze for transaction:', transactionId)
-      const analyzeResult = await analyzeWithRetry(transactionId, 2)
-      if (analyzeResult.success && analyzeResult.transaction) {
-        window.dispatchEvent(
-          new CustomEvent('transaction-analyzed', {
-            detail: { transactionId, transaction: analyzeResult.transaction },
+        try {
+          const receiptItem = await enqueueReceipt({
+            file,
+            projectId: projectId ?? undefined,
           })
-        )
-      }
-      // Process next queued item only after this analyze finishes or fails
-      setTimeout(() => void processQueue(), 0)
-    } catch (err: any) {
-      clearTimeout(timeoutId) // Clear timeout on error
-      
-      console.error('[UploadReceipt] Upload error:', {
-        name: err?.name,
-        message: err?.message,
-        stack: err?.stack,
-        itemId: currentItemId,
-      })
-      
-      // Don't update state if request was aborted (component unmounted)
-      if (err.name === 'AbortError') {
-        console.log('[UploadReceipt] Upload aborted (component unmounted)')
-        return
-      }
-      
-      const msg = err?.message || 'Failed to upload receipt. Please try again.'
-      setQueue((prev) =>
-        prev.map((q) => (q.id === currentItemId ? { ...q, status: 'error', message: msg } : q))
-      )
-      pushToast({ type: 'error', message: `上传失败: ${msg}` })
-      setError(msg)
-    } finally {
-      // CRITICAL: Always clear timeout and ensure state is reset
-      clearTimeout(timeoutId)
-      
-      // Ensure uploading state is cleared even if something goes wrong
-      setQueue((prev) => {
-        const item = prev.find((q) => q.id === currentItemId)
-        // Only reset if still in uploading state (not already updated to received/error)
-        if (item && item.status === 'uploading') {
-          return prev.map((q) =>
-            q.id === currentItemId ? { ...q, status: 'error', message: '上传中断' } : q
-          )
+          items.push({
+            id: receiptItem.id,
+            file,
+            previewUrl: URL.createObjectURL(file),
+            status: 'queued',
+            createdAt: receiptItem.createdAt,
+          })
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : '加入队列失败'
+          setError(msg)
+          pushToast({ type: 'error', message: msg })
         }
-        return prev
-      })
-      
-      // small delay to avoid overload, then continue
-      await new Promise((r) => setTimeout(r, 200))
-      // process next queued item (use functional update to get latest queue)
-      setTimeout(() => {
-        void processQueue()
-      }, 0)
-    }
-  }, [onUploadSuccess, projectId, pushToast])
+      }
+      if (items.length > 0) {
+        setQueue((prev) => [...items, ...prev])
+        setError(null)
+      }
+    },
+    [projectId, pushToast]
+  )
+
+  const handleFiles = useCallback(
+    (files: File[]) => {
+      void enqueueFiles(files)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    },
+    [enqueueFiles]
+  )
 
   // Auto-redirect when queue is empty (all files uploaded with green checkmark)
   useEffect(() => {
@@ -421,33 +237,9 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
     return () => clearTimeout(timer)
   }, [allReceived, queue.length, pushToast, router])
 
-  // Auto-process queue when new items are added
-  useEffect(() => {
-    const hasQueued = queue.some((q) => q.status === 'queued')
-    const isCurrentlyUploading = queue.some((q) => q.status === 'uploading')
-    
-    console.log('[UploadReceipt] Queue state check:', {
-      queueLength: queue.length,
-      hasQueued,
-      isCurrentlyUploading,
-      queueStatuses: queue.map(q => ({ id: q.id, status: q.status })),
-    })
-    
-    // Only process if there are queued items AND we're not already uploading
-    if (hasQueued && !isCurrentlyUploading) {
-      console.log('[UploadReceipt] Triggering processQueue...')
-      // small delay to ensure state is settled
-      const timer = setTimeout(() => {
-        void processQueue()
-      }, 100)
-      return () => clearTimeout(timer)
-    } else if (hasQueued && isCurrentlyUploading) {
-      console.log('[UploadReceipt] Skipping processQueue: already uploading')
-    }
-  }, [queue, processQueue])
-
-  const removeItem = (id: string) => {
+  const removeItem = useCallback((id: string) => {
     if (cropItemId === id) setCropItemId(null)
+    void deleteQueueItem(id).catch(() => {})
     setQueue((prev) => {
       const item = prev.find((q) => q.id === id)
       if (item?.previewUrl) {
@@ -459,19 +251,19 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
       }
       return prev.filter((q) => q.id !== id)
     })
-  }
+  }, [cropItemId])
 
   const handleCropConfirm = useCallback(
-    (blob: Blob | null) => {
+    async (blob: Blob | null) => {
       const id = cropItemId
       setCropItemId(null)
       if (!id) return
       if (blob) {
+        const name = (queue.find((q) => q.id === id)?.file.name ?? 'receipt').replace(/\.[^.]+$/, '') + '.jpg'
+        const newFile = new File([blob], name, { type: 'image/jpeg' })
         setQueue((prev) => {
           const item = prev.find((q) => q.id === id)
           if (!item) return prev
-          const name = item.file.name.replace(/\.[^.]+$/, '') + '.jpg'
-          const newFile = new File([blob], name, { type: 'image/jpeg' })
           const newPreviewUrl = URL.createObjectURL(blob)
           try {
             URL.revokeObjectURL(item.previewUrl)
@@ -482,10 +274,15 @@ export function UploadReceipt({ onUploadSuccess, onCancel, projectId }: UploadRe
             q.id === id ? { ...q, file: newFile, previewUrl: newPreviewUrl } : q
           )
         })
+        try {
+          await putBlob(id, newFile)
+        } catch {
+          // ignore
+        }
         pushToast({ type: 'info', message: '已裁剪，将上传裁剪后的图片' })
       }
     },
-    [cropItemId, pushToast]
+    [cropItemId, queue, pushToast]
   )
 
   return (
