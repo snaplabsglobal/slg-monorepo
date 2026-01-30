@@ -1,7 +1,11 @@
 // lib/permissions/permissions.ts
-// Permission checking utilities
+// Permission checking utilities (Server-only: uses next/headers via createClient)
 
 import { createClient } from '@/lib/supabase/server'
+import {
+  checkAppAccessWithClient,
+  logAppAccessWithClient,
+} from './permissions-edge'
 
 /**
  * Check if user has access to a specific app
@@ -11,18 +15,7 @@ export async function checkAppAccess(
   appCode: string
 ): Promise<boolean> {
   const supabase = await createClient()
-
-  const { data, error } = await supabase.rpc('check_app_access', {
-    p_user_id: userId,
-    p_app_code: appCode,
-  })
-
-  if (error) {
-    console.error('Error checking app access:', error)
-    return false
-  }
-
-  return data as boolean
+  return checkAppAccessWithClient(supabase, userId, appCode)
 }
 
 /**
@@ -55,21 +48,7 @@ export async function logAppAccess(params: {
   userAgent?: string | null
 }) {
   const supabase = await createClient()
-
-  const { data, error } = await supabase.rpc('log_app_access', {
-    p_user_id: params.userId,
-    p_app_code: params.appCode,
-    p_access_granted: params.accessGranted,
-    p_denial_reason: params.denialReason,
-    p_ip_address: params.ipAddress,
-    p_user_agent: params.userAgent,
-  })
-
-  if (error) {
-    console.error('Error logging app access:', error)
-  }
-
-  return data
+  return logAppAccessWithClient(supabase, params)
 }
 
 /**

@@ -59,18 +59,19 @@ export async function POST(request: NextRequest) {
       filename,
     })
 
-    // Upload to R2
+    // Upload to R2 (metadata values must be string)
     const fileBuffer = await file.arrayBuffer()
+    const metadata: Record<string, string> = {
+      uploadedBy: user.id,
+      organizationId: orgMember.organization_id,
+      originalFilename: file.name,
+    }
+    if (projectId) metadata.projectId = projectId
     const { fileUrl } = await uploadToR2(
       fileBuffer,
       filePath,
       file.type || 'application/octet-stream',
-      {
-        uploadedBy: user.id,
-        organizationId: orgMember.organization_id,
-        originalFilename: file.name,
-        projectId: projectId || undefined,
-      }
+      metadata
     )
 
     return NextResponse.json({
@@ -137,18 +138,19 @@ export async function GET(request: NextRequest) {
       filename,
     })
 
-    // Generate presigned URL
+    // Generate presigned URL (metadata values must be string)
     const expiresIn = parseInt(searchParams.get('expiresIn') || '3600')
+    const getMetadata: Record<string, string> = {
+      uploadedBy: user.id,
+      organizationId: orgMember.organization_id,
+      originalFilename: filename,
+    }
+    if (projectId) getMetadata.projectId = projectId
     const { presignedUrl, fileUrl } = await generatePresignedUrl(
       filePath,
       contentType,
       expiresIn,
-      {
-        uploadedBy: user.id,
-        organizationId: orgMember.organization_id,
-        originalFilename: filename,
-        projectId: projectId || undefined,
-      }
+      getMetadata
     )
 
     return NextResponse.json({

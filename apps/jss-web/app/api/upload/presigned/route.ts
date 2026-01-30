@@ -58,17 +58,19 @@ export async function GET(request: NextRequest) {
       filename,
     })
 
-    // Generate presigned URL
+    // Generate presigned URL (metadata values must be string)
+    const metadata: Record<string, string> = {
+      uploadedBy: user.id,
+      organizationId: orgMember.organization_id,
+      originalFilename: filename,
+    }
+    if (projectId) metadata.projectId = projectId
+
     const { presignedUrl, fileUrl } = await generatePresignedUrl(
       filePath,
       contentType,
       expiresIn,
-      {
-        uploadedBy: user.id,
-        organizationId: orgMember.organization_id,
-        originalFilename: filename,
-        projectId: projectId || undefined,
-      }
+      metadata
     )
 
     return NextResponse.json({

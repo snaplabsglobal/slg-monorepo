@@ -1,9 +1,14 @@
 // middleware.ts
 // Enhanced middleware with app-level permission checking
+// Uses Edge-safe permissions (no next/headers) so middleware can run in Edge.
 
 import { type NextRequest, NextResponse } from 'next/server'
 import { createMiddlewareClient } from '@slo/snap-auth'
-import { checkAppAccess, logAppAccess } from '@/lib/permissions/permissions'
+import {
+  checkAppAccessWithClient,
+  logAppAccessWithClient,
+  getUserDataSnapshotWithClient,
+} from '@/lib/permissions/permissions-edge'
 
 // 定义当前应用的代码
 const CURRENT_APP_CODE = process.env.NEXT_PUBLIC_APP_CODE || 'jobsite-snap'
@@ -55,16 +60,19 @@ export async function middleware(request: NextRequest) {
   // ============================================
   if (user && isProtectedPath) {
     try {
-      // 检查用户是否有权限访问当前应用
-      const hasAccess = await checkAppAccess(user.id, CURRENT_APP_CODE)
+      // 使用 middleware 的 supabase（不依赖 next/headers）
+      const hasAccess = await checkAppAccessWithClient(
+        supabase,
+        user.id,
+        CURRENT_APP_CODE
+      )
 
-      // 记录访问日志
-      await logAppAccess({
+      await logAppAccessWithClient(supabase, {
         userId: user.id,
         appCode: CURRENT_APP_CODE,
         accessGranted: hasAccess,
         denialReason: hasAccess ? null : 'insufficient_subscription_tier',
-        ipAddress: request.ip || request.headers.get('x-forwarded-for') || null,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
         userAgent: request.headers.get('user-agent') || null,
       })
 
@@ -72,8 +80,7 @@ export async function middleware(request: NextRequest) {
       // 软拦截：重定向到升级页面
       // ============================================
       if (!hasAccess) {
-        // 获取用户的数据快照（用于个性化升级提示）
-        const userData = await getUserDataSnapshot(user.id)
+        const userData = await getUserDataSnapshotWithClient(supabase, user.id)
         
         const upgradeUrl = new URL('/upgrade', request.url)
         upgradeUrl.searchParams.set('from', 'paywall')
@@ -95,30 +102,6 @@ export async function middleware(request: NextRequest) {
   }
 
   return response
-}
-
-// ============================================
-// 辅助函数：获取用户数据快照
-// ============================================
-async function getUserDataSnapshot(userId: string) {
-  // 这里可以查询用户在其他应用的数据
-  // 例如：LedgerSnap 中的收据数量
-  try {
-    const { createServerClient } = await import('@slo/snap-auth')
-    const supabase = await createServerClient()
-
-    // 示例：获取 LedgerSnap 数据
-    // 实际实现需要根据你的数据库结构调整
-    const { data, error } = await supabase
-      .rpc('get_user_stats', { p_user_id: userId })
-
-    if (error) throw error
-
-    return data
-  } catch (error) {
-    console.error('Failed to get user data snapshot:', error)
-    return null
-  }
 }
 
 export const config = {

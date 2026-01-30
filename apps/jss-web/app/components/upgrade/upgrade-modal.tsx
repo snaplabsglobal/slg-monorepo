@@ -29,18 +29,21 @@ export function UpgradeModal({
 
   const handleUpgrade = async () => {
     setLoading(true)
-    
     try {
-      // Create upgrade request
-      await createUpgradeRequest({
-        userId: user.id,
-        toTier: 'pro_jss',
-        appCode,
-        referralSource,
-        userDataSnapshot: userData,
+      const res = await fetch('/api/upgrade-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toTier: 'pro_jss',
+          appCode,
+          referralSource,
+          userDataSnapshot: userData,
+        }),
       })
-
-      // Redirect to payment page (Stripe/etc)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Request failed')
+      }
       router.push(`/checkout?tier=pro_jss&app=${appCode}`)
     } catch (error) {
       console.error('Failed to create upgrade request:', error)
