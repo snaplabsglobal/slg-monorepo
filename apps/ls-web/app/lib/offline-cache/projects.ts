@@ -7,16 +7,20 @@
 const DB_NAME = 'ls_offline_cache'
 const STORE_PROJECTS = 'projects'
 const MAX_PROJECTS = 3
+const DB_VERSION = 2
 
 async function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onerror = () => reject(req.error)
     req.onsuccess = () => resolve(req.result)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
         db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains('transactions')) {
+        db.createObjectStore('transactions', { keyPath: 'id' })
       }
     }
   })

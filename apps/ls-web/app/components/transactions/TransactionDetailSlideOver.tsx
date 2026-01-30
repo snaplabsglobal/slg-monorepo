@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ReceiptImagePanel } from './ReceiptImagePanel'
 import { TransactionDataForm, type TransactionDetail } from './TransactionDataForm'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
+import { fetchWithOffline } from '@/app/lib/utils/fetchWithOffline'
+import { getTransaction, putTransaction } from '@/app/lib/offline-cache/transactions'
+import { useOffline } from '@/app/hooks/useOffline'
 
 interface TransactionDetailSlideOverProps {
   transactionId: string | null
@@ -24,9 +27,11 @@ export function TransactionDetailSlideOver({
   const [transaction, setTransaction] = useState<TransactionDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
+  const isOffline = useOffline()
 
   const open = !!transactionId
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
+  const isOfflineCachedOnly = isOffline && !!transaction
 
   useEffect(() => {
     if (!open) return
@@ -45,36 +50,55 @@ export function TransactionDetailSlideOver({
       return
     }
 
+    const id = transactionId
     let cancelled = false
     async function run() {
       try {
         setLoading(true)
         setError(null)
         const url = includeDeleted
-          ? `/api/transactions/${transactionId}?includeDeleted=true`
-          : `/api/transactions/${transactionId}`
-        const res = await fetch(url)
+          ? `/api/transactions/${id}?includeDeleted=true`
+          : `/api/transactions/${id}`
+
+        const cached = await getTransaction(id)
+        if (!cancelled && cached) {
+          setTransaction(cached as unknown as TransactionDetail)
+        }
+
+        const res = await fetchWithOffline(url)
+        if (res.offline) {
+          if (!cancelled) {
+            if (!cached) setError('离线模式：此收据详情尚未本地化')
+            setLoading(false)
+          }
+          return
+        }
+
         const json = await res.json().catch(() => ({}))
         if (!res.ok) {
-          // If transaction was deleted (404) and not viewing Recycle Bin, close the slideover
           if (!includeDeleted && res.status === 404 && json?.error?.includes('deleted')) {
             if (!cancelled) {
               onClose()
               return
             }
           }
-          throw new Error(json?.error || `Failed to load transaction (${res.status})`)
+          if (!cancelled) setError(json?.error || `加载失败 (${res.status})`)
+          return
         }
         if (!cancelled) {
-          // When not in Recycle Bin, close if transaction is deleted
           if (!includeDeleted && json.transaction?.deleted_at) {
             onClose()
             return
           }
-          setTransaction(json.transaction)
+          const tx = json.transaction
+          setTransaction(tx)
+          if (tx?.id) void putTransaction(tx).catch(() => {})
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load transaction')
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : '加载失败'
+          setError(msg === 'Failed to fetch' ? '暂时无法获取详情，请稍后重试' : msg)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -83,7 +107,7 @@ export function TransactionDetailSlideOver({
     return () => {
       cancelled = true
     }
-  }, [transactionId, includeDeleted])
+  }, [transactionId, includeDeleted, onClose])
 
   const title = useMemo(() => {
     if (!transaction) return 'Receipt detail'
@@ -291,11 +315,24 @@ export function TransactionDetailSlideOver({
           {loading ? (
             <div className="h-full flex items-center justify-center text-sm text-gray-500">Loading…</div>
           ) : error ? (
-            <div className="h-full flex items-center justify-center text-sm text-red-600">{error}</div>
+            <div
+              className={
+                error.startsWith('离线模式：')
+                  ? 'h-full flex items-center justify-center text-sm text-amber-700'
+                  : 'h-full flex items-center justify-center text-sm text-red-600'
+              }
+            >
+              {error}
+            </div>
           ) : !transaction ? (
             <div className="h-full flex items-center justify-center text-sm text-gray-500">No data</div>
           ) : (
             <div className="h-full flex flex-col">
+              {isOfflineCachedOnly && (
+                <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm mx-4 mt-2">
+                  离线显示缓存版本
+                </div>
+              )}
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 overflow-hidden min-h-0">
                 {/* Left: image (60%) */}
                 <div className="lg:col-span-3 p-6 overflow-hidden">

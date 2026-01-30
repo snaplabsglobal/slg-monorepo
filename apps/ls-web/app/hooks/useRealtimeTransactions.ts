@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { deriveAsyncStatus } from '@/app/components/transactions/status'
+import { useOffline } from '@/app/hooks/useOffline'
 
 type Transaction = {
   id: string
@@ -20,7 +21,16 @@ type Transaction = {
   deleted_at?: string | null
 }
 
-export function useRealtimeTransactions(organizationId?: string) {
+export type UseRealtimeTransactionsOptions = {
+  onOfflineRefetch?: () => void
+}
+
+export function useRealtimeTransactions(
+  organizationId?: string,
+  options?: UseRealtimeTransactionsOptions
+) {
+  const { onOfflineRefetch } = options ?? {}
+  const isOffline = useOffline()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -52,17 +62,26 @@ export function useRealtimeTransactions(organizationId?: string) {
       return
     }
 
+    // Offline: do not fetch and do not start 5s polling (avoid "hitting the wall" every 5s)
+    if (isOffline) {
+      setIsLoading(false)
+      return
+    }
+
     mountedRef.current = true
     isCleaningUpRef.current = false
     hadChannelErrorRef.current = false
 
-    // Initial load
     const loadTransactions = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        onOfflineRefetch?.()
+        return
+      }
       try {
         const query = supabase
           .from('transactions')
           .select('*')
-          .eq('organization_id', organizationId) // organizationId is guaranteed to exist here
+          .eq('organization_id', organizationId)
           .is('deleted_at', null)
           .order('transaction_date', { ascending: false })
           .limit(50)
@@ -71,59 +90,46 @@ export function useRealtimeTransactions(organizationId?: string) {
 
         if (error) {
           console.error('[RealtimeTransactions] Load error:', error)
-          if (mountedRef.current) {
-            setIsLoading(false)
-          }
+          if (mountedRef.current) setIsLoading(false)
           return
         }
 
         if (mountedRef.current) {
-          // Use Map for upsert logic to prevent duplicates (ID-based deduplication)
-          // CRITICAL: Filter out deleted items (eye-out-of-sight)
           const transactionMap = new Map<string, Transaction>()
           ;(data || []).forEach((tx: Transaction) => {
-            // Only add non-deleted transactions to the map
-            if (!tx.deleted_at) {
-              transactionMap.set(tx.id, tx) // If ID exists, it will be overwritten (upsert)
-            }
+            if (!tx.deleted_at) transactionMap.set(tx.id, tx)
           })
           const uniqueTransactions = Array.from(transactionMap.values())
-          
           setTransactions(uniqueTransactions)
           const pending = uniqueTransactions.filter((t: Transaction) => deriveAsyncStatus(t) === 'pending').length
           setPendingCount(pending)
           setIsLoading(false)
         }
-      } catch (error) {
-        console.error('[RealtimeTransactions] Load error:', error)
-        if (mountedRef.current) {
-          setIsLoading(false)
-        }
+      } catch (err) {
+        console.error('[RealtimeTransactions] Load error:', err)
+        if (mountedRef.current) setIsLoading(false)
       }
     }
 
     void loadTransactions()
-    
-    // CRITICAL: Listen for custom events as fallback if Realtime is delayed
+
     const handleTransactionAnalyzed = () => {
       void loadTransactions()
     }
-    
     window.addEventListener('transaction-analyzed', handleTransactionAnalyzed)
-    
-    // CRITICAL: Set up periodic refresh as fallback if Realtime doesn't work
-    // This ensures UI updates even if Realtime events are missed
-    // Use a shorter interval (5 seconds) to catch analyze completion faster
+
+    // Only run 5s polling when online; offline branch above returns early so no interval
     const refreshInterval = setInterval(() => {
-      if (mountedRef.current && organizationId) {
+      if (mountedRef.current && organizationId && typeof navigator !== 'undefined' && navigator.onLine) {
         void loadTransactions()
       }
-    }, 5000) // Refresh every 5 seconds as fallback
+    }, 5000)
 
     // CRITICAL: Check if channel already exists to prevent duplicate subscriptions
     if (channelRef.current) {
       return () => {
         clearInterval(refreshInterval)
+        window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
       }
     }
 
@@ -250,9 +256,8 @@ export function useRealtimeTransactions(organizationId?: string) {
         })
       }
     }
-    // CRITICAL: Only depend on organizationId (channelName is derived from it)
-    // This prevents unnecessary re-subscriptions when channelName string changes but orgId is the same
-  }, [organizationId, supabase]) // organizationId and supabase (both stable)
+    // Re-run when isOffline flips to false so we start polling and refresh once (online recovery)
+  }, [organizationId, isOffline, supabase])
 
   return {
     transactions,

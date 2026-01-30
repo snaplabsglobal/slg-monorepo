@@ -1,7 +1,7 @@
 // components/transactions/TransactionList.tsx
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { TransactionCard } from './TransactionCard'
 import { TransactionVisualCard } from './TransactionVisualCard'
 import { TransactionsTable } from './TransactionsTable'
@@ -11,6 +11,9 @@ import { useHasMounted } from '@/app/hooks/useHasMounted'
 import { ViewToggle, type ViewMode } from './ViewToggle'
 import { FiltersBar, type Filters } from './FiltersBar'
 import { deriveAsyncStatus } from './status'
+
+const OFFLINE_TOAST_MSG = '离线模式：无法刷新，将显示本地缓存'
+const OFFLINE_TOAST_DURATION_MS = 4000
 
 export interface Transaction {
   id: string
@@ -41,6 +44,8 @@ export function TransactionList({
 }: TransactionListProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [offlineToast, setOfflineToast] = useState<string | null>(null)
+  const offlineToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // View mode: card or list (persist to localStorage)
   const [viewMode, setViewMode] = useState<ViewMode>('card')
@@ -64,11 +69,26 @@ export function TransactionList({
     localStorage.setItem('transactions-view-mode', mode)
   }
 
-  // Use Realtime hook only for main list (not recycle bin)
-  // Recycle bin uses server-side props only
-  const { transactions: realtimeTransactions, isLoading } = showRestoreButton 
-    ? { transactions: [], isLoading: false } // Don't use Realtime for recycle bin
-    : useRealtimeTransactions(organizationId)
+  const onOfflineRefetch = useCallback(() => {
+    if (offlineToastTimeoutRef.current) clearTimeout(offlineToastTimeoutRef.current)
+    setOfflineToast(OFFLINE_TOAST_MSG)
+    offlineToastTimeoutRef.current = setTimeout(() => {
+      setOfflineToast(null)
+      offlineToastTimeoutRef.current = null
+    }, OFFLINE_TOAST_DURATION_MS)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (offlineToastTimeoutRef.current) clearTimeout(offlineToastTimeoutRef.current)
+    }
+  }, [])
+
+  // Use Realtime hook only for main list (not recycle bin). Call unconditionally for rules of hooks.
+  const realtimeResult = useRealtimeTransactions(organizationId, { onOfflineRefetch })
+  const { transactions: realtimeTransactions, isLoading } = showRestoreButton
+    ? { transactions: [] as Transaction[], isLoading: false }
+    : realtimeResult
 
   // Use realtime data if available, otherwise fallback to props
   let rawTransactions = showRestoreButton 
@@ -240,6 +260,15 @@ export function TransactionList({
           }
         }}
       />
+
+      {offlineToast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-2 text-sm shadow-lg max-w-[90vw]"
+        >
+          {offlineToast}
+        </div>
+      )}
     </div>
   )
 }

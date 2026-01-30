@@ -7,6 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { TransactionDataForm, type TransactionDataFormHandle, type TransactionDetail } from './TransactionDataForm'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
+import { fetchWithOffline } from '@/app/lib/utils/fetchWithOffline'
+import { getTransaction, putTransaction } from '@/app/lib/offline-cache/transactions'
+import { useOffline } from '@/app/hooks/useOffline'
 
 const SNAP_QUICK = '60%'   // 默认：缩略图 + 核心数据
 const SNAP_FULL = '95vh'   // 全屏：编辑 / 地址等详情
@@ -41,8 +44,10 @@ export function MobileBottomSheet({
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
   const [addressExpanded, setAddressExpanded] = useState(false)
   const formRef = useRef<TransactionDataFormHandle>(null)
+  const isOffline = useOffline()
 
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
+  const isOfflineCachedOnly = isOffline && !!transaction
   const isFullHeight = sheetHeight === SNAP_FULL
 
   /** 点开时默认 60%；切换交易时重置 */
@@ -60,15 +65,30 @@ export function MobileBottomSheet({
       return
     }
 
+    const id = transactionId
     let cancelled = false
     async function run() {
       try {
         setLoading(true)
         setError(null)
         const url = includeDeleted
-          ? `/api/transactions/${transactionId}?includeDeleted=true`
-          : `/api/transactions/${transactionId}`
-        const res = await fetch(url)
+          ? `/api/transactions/${id}?includeDeleted=true`
+          : `/api/transactions/${id}`
+
+        const cached = await getTransaction(id)
+        if (!cancelled && cached) {
+          setTransaction(cached as unknown as TransactionDetail)
+        }
+
+        const res = await fetchWithOffline(url)
+        if (res.offline) {
+          if (!cancelled) {
+            if (!cached) setError('离线模式：此收据详情尚未本地化')
+            setLoading(false)
+          }
+          return
+        }
+
         const json = await res.json().catch(() => ({}))
         if (!res.ok) {
           if (!includeDeleted && res.status === 404 && json?.error?.includes('deleted')) {
@@ -77,17 +97,23 @@ export function MobileBottomSheet({
               return
             }
           }
-          throw new Error(json?.error || `Failed to load transaction (${res.status})`)
+          if (!cancelled) setError(json?.error || `加载失败 (${res.status})`)
+          return
         }
         if (!cancelled) {
           if (!includeDeleted && json.transaction?.deleted_at) {
             onClose()
             return
           }
-          setTransaction(json.transaction)
+          const tx = json.transaction
+          setTransaction(tx)
+          if (tx?.id) void putTransaction(tx).catch(() => {})
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load transaction')
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : '加载失败'
+          setError(msg === 'Failed to fetch' ? '暂时无法获取详情，请稍后重试' : msg)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -231,8 +257,28 @@ export function MobileBottomSheet({
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 my-4">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div
+              className={
+                error.startsWith('离线模式：')
+                  ? 'bg-amber-50 border border-amber-200 rounded-lg p-4 my-4'
+                  : 'bg-red-50 border border-red-200 rounded-lg p-4 my-4'
+              }
+            >
+              <p
+                className={
+                  error.startsWith('离线模式：')
+                    ? 'text-amber-800 text-sm'
+                    : 'text-red-800 text-sm'
+                }
+              >
+                {error}
+              </p>
+            </div>
+          )}
+
+          {isOfflineCachedOnly && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm my-2">
+              离线显示缓存版本
             </div>
           )}
 
