@@ -17,6 +17,7 @@ import {
   UserIcon,
 } from './icons';
 import { UploadQueueIndicator } from '@/app/components/receipts/UploadQueueIndicator';
+import { InstallPrompt } from '@/app/components/pwa/InstallPrompt';
 import { useOffline } from '@/app/hooks/useOffline';
 
 // Recycle Bin Icon
@@ -67,6 +68,8 @@ export function DashboardLayout({ children, userEmail, userName }: DashboardLayo
           目前处于离线模式，功能受限，数据将在恢复网络后同步
         </div>
       )}
+      {/* PWA install prompt (only when not installed; dismiss 7 days) */}
+      <InstallPrompt />
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 

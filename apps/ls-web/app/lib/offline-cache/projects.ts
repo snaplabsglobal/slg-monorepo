@@ -76,3 +76,16 @@ export async function cacheProjectsFromApi(projects: { id: string; name?: string
     await putProject({ id: p.id, name: p.name ?? 'Unnamed', updatedAt: now })
   }
 }
+
+/** Fetch projects from API, write to IDB (LRU 3), and return list for rendering. */
+export async function fetchAndCacheProjects(): Promise<{ id: string; name: string }[]> {
+  const res = await fetch('/api/projects', { credentials: 'same-origin' })
+  if (!res.ok) throw new Error(`Projects API ${res.status}`)
+  const json = await res.json()
+  const list = (json?.projects ?? []).map((p: { id: string; name?: string }) => ({
+    id: p.id,
+    name: p.name ?? 'Unnamed',
+  }))
+  await cacheProjectsFromApi(list)
+  return list
+}
