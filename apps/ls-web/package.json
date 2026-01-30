@@ -14,7 +14,6 @@
     "@aws-sdk/s3-request-presigner": "^3.975.0",
     "@google/generative-ai": "^0.21.0",
     "@slo/snap-auth": "workspace:^",
-    "@slo/snap-storage": "workspace:^",
     "@supabase/supabase-js": "^2.93.0",
     "next": "16.1.1",
     "react": "19.2.3",

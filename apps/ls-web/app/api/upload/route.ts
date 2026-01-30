@@ -1,6 +1,6 @@
 // app/api/upload/route.ts
 // File upload API for Cloudflare R2
-// Uses shared @slo/snap-storage package
+// Uses local R2 module (lib/storage/r2)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
@@ -9,7 +9,7 @@ import {
   generatePresignedUrl,
   generateFilePath,
   deleteFromR2,
-} from '@slo/snap-storage/server'
+} from '@/app/lib/storage/r2'
 
 // POST /api/upload - Upload file to R2
 export async function POST(request: NextRequest) {

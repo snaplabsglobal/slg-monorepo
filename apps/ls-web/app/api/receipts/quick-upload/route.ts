@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
-import { uploadToR2, generateFilePath } from '@slo/snap-storage/server'
+import { uploadToR2, generateFilePath } from '@/app/lib/storage/r2'
 import { createHash } from 'crypto'
 
 export async function POST(request: NextRequest) {

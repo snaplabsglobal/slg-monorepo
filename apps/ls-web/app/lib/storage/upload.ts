@@ -1,7 +1,17 @@
 // lib/storage/upload.ts
-// Client-side file upload utilities
-// Re-export types from shared package for convenience
-export type { UploadOptions, UploadResult } from '@slo/snap-storage/client'
+// Client-side file upload utilities (no @slo/snap-storage dependency)
+
+export interface UploadOptions {
+  folder?: string
+  transactionId?: string
+  contentType?: string
+  onProgress?: (progress: number) => void
+}
+
+export interface UploadResult {
+  url: string
+  path: string
+}
 
 /**
  * Upload file directly to R2 using presigned URL

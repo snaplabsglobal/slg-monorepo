@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, context: Ctx) {
     const key = keyFromAttachmentUrl(current.attachment_url as string | null)
     if (key) {
       try {
-        const { deleteFromR2 } = await import('@slo/snap-storage/server')
+        const { deleteFromR2 } = await import('@/app/lib/storage/r2')
         await deleteFromR2(key)
       } catch (r2Err: any) {
         // Log but continue - DB row should still be removed

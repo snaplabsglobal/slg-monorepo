@@ -1,13 +1,13 @@
 // app/api/upload/presigned/route.ts
 // Generate presigned URL for direct client upload to R2
-// Uses shared @slo/snap-storage package
+// Uses local R2 module (lib/storage/r2)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
 import {
   generatePresignedUrl,
   generateFilePath,
-} from '@slo/snap-storage/server'
+} from '@/app/lib/storage/r2'
 
 // GET /api/upload/presigned - Generate presigned URL
 export async function GET(request: NextRequest) {

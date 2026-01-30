@@ -52,10 +52,10 @@ function inferMimeType(url: string) {
 
 export async function POST(_request: NextRequest, context: RouteContext) {
   const startTime = Date.now()
+  const { id } = await context.params
   console.log('[Analyze Receipt] Request received at:', new Date().toISOString())
   
   try {
-    const { id } = await context.params
     console.log('[Analyze Receipt] Processing transaction:', id)
     const supabase = await createServerClient()
     const {
@@ -332,7 +332,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
     const updates: Record<string, any> = {
       vendor_name: analysis.vendor_name,
-      transaction_date: transactionDateForUpdate || current.transaction_date,
+      transaction_date: analysis.transaction_date || current.transaction_date,
       currency: analysis.currency || current.currency || 'CAD',
       // Ensure total_amount is always positive (use Math.abs to be safe)
       total_amount: Math.abs(totalCents / 100),

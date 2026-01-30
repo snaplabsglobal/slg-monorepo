@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     const key = keyFromAttachmentUrl(row.attachment_url as string | null)
     if (key) {
       try {
-        const { deleteFromR2 } = await import('@slo/snap-storage/server')
+        const { deleteFromR2 } = await import('@/app/lib/storage/r2')
         await deleteFromR2(key)
       } catch (e: any) {
         if (!e?.message?.includes('not configured')) {

@@ -140,7 +140,9 @@ export function useRealtimeTransactions(organizationId?: string) {
         },
         (payload) => {
           // Filter by organization_id if specified
-          const txOrgId = payload.new?.organization_id || payload.old?.organization_id
+          const newRow = payload.new as Record<string, unknown> | null
+          const oldRow = payload.old as Record<string, unknown> | null
+          const txOrgId = (newRow?.organization_id || oldRow?.organization_id) as string | undefined
           if (organizationId && txOrgId !== organizationId) {
             return
           }

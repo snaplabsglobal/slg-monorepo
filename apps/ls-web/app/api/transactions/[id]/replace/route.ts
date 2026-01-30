@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
-import { uploadToR2, generateFilePath } from '@slo/snap-storage/server'
+import { uploadToR2, generateFilePath } from '@/app/lib/storage/r2'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -50,11 +50,11 @@ export async function POST(request: NextRequest, context: Ctx) {
 
     const buf = Buffer.from(await file.arrayBuffer())
     const filePath = generateFilePath({
+      folder: 'receipts',
       organizationId: membership.organization_id,
-      userId: user.id,
+      transactionId: id,
       filename: file.name || 'receipt.jpg',
-      prefix: 'receipts',
-    } as any)
+    })
 
     const upload = await uploadToR2(buf, filePath, file.type || 'image/jpeg', {
       uploadedBy: user.id,

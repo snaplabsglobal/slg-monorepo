@@ -12,6 +12,7 @@ import { deriveAsyncStatus } from './status'
 export interface TransactionVisualCardProps {
   transaction: Transaction
   onClick: () => void
+  priority?: boolean
 }
 
 // Clock icon SVG
