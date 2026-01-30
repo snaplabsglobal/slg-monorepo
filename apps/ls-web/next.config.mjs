@@ -28,18 +28,22 @@ const nextConfig = {
     },
     // Set output file tracing root to monorepo root for proper dependency resolution
     outputFileTracingRoot: path.join(__dirname, '../..'),
-    // Configure images to allow R2 storage domains
-    // Note: Next.js remotePatterns supports wildcards, but for R2 we need to match pub-*.r2.dev pattern
+    // Configure images to allow R2 and Supabase Storage domains
     images: {
         remotePatterns: [
             {
                 protocol: 'https',
-                hostname: '*.r2.dev', // Match all subdomains of r2.dev
+                hostname: '*.r2.dev',
             },
-            // Also allow specific R2 public bucket patterns
             {
                 protocol: 'https',
                 hostname: 'pub-*.r2.dev',
+            },
+            // Supabase Storage (e.g. receipt-images bucket public URLs)
+            {
+                protocol: 'https',
+                hostname: '*.supabase.co',
+                pathname: '/storage/v1/object/public/**',
             },
         ],
     },

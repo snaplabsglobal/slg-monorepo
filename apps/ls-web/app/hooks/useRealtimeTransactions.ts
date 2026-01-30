@@ -217,16 +217,20 @@ export function useRealtimeTransactions(organizationId?: string) {
     // CRITICAL: Cleanup function - only runs on unmount or when organizationId/channelName actually changes
     return () => {
       isCleaningUpRef.current = true
-      clearInterval(refreshInterval) // Clear periodic refresh
+      clearInterval(refreshInterval)
       window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
       mountedRef.current = false
       if (channelRef.current) {
-        try {
-          supabase.removeChannel(channelRef.current)
-        } catch (error) {
-          console.error('[RealtimeTransactions] Error removing channel:', error)
-        }
+        const ch = channelRef.current
         channelRef.current = null
+        // Fire-and-forget: avoid "WebSocket closed before connection established" when navigating away quickly
+        void Promise.resolve().then(() => {
+          try {
+            supabase.removeChannel(ch)
+          } catch {
+            // ignore cleanup errors
+          }
+        })
       }
     }
     // CRITICAL: Only depend on organizationId (channelName is derived from it)

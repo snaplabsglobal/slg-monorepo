@@ -85,6 +85,9 @@ push 到 `dev` 后，若 https://dev.ledgersnap.app 仍显示旧内容，按下�
 | **GET …/production-deployment 404** | Vercel Dashboard 或前端脚本在请求项目「生产部署」信息，当前项目/团队下可能没有 production 部署或 API 路径不匹配。 | 属 Vercel 后台/前端逻辑，与 ls-web 业务无关。可忽略。 |
 | **The resource &lt;URL&gt; was preloaded using link preload but not used** | Next.js 预加载了部分 chunk，但几秒内未使用。 | 已在 ls-web 中为所有 `<Link>` 添加 `prefetch={false}`，减少预加载的 route chunk，从而减少该警告。若仍有个别出现可忽略。 |
 | **GET …/api.knock.app/… 429 (Too Many Requests)** | Knock 通知 feed 请求被限流。 | 来自 Vercel/Knock 集成，请求过于频繁时会出现。可忽略或检查 Knock 用量/限流配置。 |
+| **WebSocket connection to …supabase.co/realtime/… failed: WebSocket is closed before the connection is established** | 页面切换或组件卸载时，Supabase Realtime 频道在连接建立前被关闭。 | 已在 `useRealtimeTransactions` 中改为异步清理频道，减少该报错。若偶发可忽略；若频繁出现可检查是否在 layout 中过早卸载订阅。 |
+| **GET …/_next/image?url=…supabase.co/… 400 (Bad Request)** | Next.js Image 组件优化外部图片时，未允许 Supabase Storage 域名。 | 已在 `next.config.mjs` 的 `images.remotePatterns` 中加入 `*.supabase.co`（pathname `/storage/v1/object/public/**`）。部署后生效。 |
+| **POST …/api/receipts/[id]/analyze 500** | 收据 AI 分析接口报错。 | 在 Vercel 项目 **Settings → Environment Variables** 中配置 **GEMINI_API_KEY**（或项目使用的 Gemini 环境变量名）。未配置或 key 无效会导致 500。 |
 
 若**只有**上述几类，而页面功能正常，无需修改应用代码；若伴随**白屏、接口 4xx/5xx、或业务逻辑错误**，再按部署/环境/接口逐项排查。
 
