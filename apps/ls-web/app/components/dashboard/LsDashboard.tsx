@@ -236,7 +236,7 @@ export function LsDashboard() {
             <h2 className="text-lg font-bold text-gray-900">Recent transactions</h2>
             <p className="text-sm text-gray-600">Latest 5</p>
           </div>
-          <Link href="/transactions" className="text-sm font-semibold text-blue-700 hover:text-blue-800">
+          <Link href="/transactions" prefetch={false} className="text-sm font-semibold text-blue-700 hover:text-blue-800">
             View all
           </Link>
         </div>
@@ -251,6 +251,7 @@ export function LsDashboard() {
               <Link
                 key={tx.id}
                 href="/transactions"
+                prefetch={false}
                 className="p-6 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <div className="min-w-0 flex-1">

@@ -13,14 +13,15 @@ export default function LedgerSnapLanding() {
           
           {/* Desktop Navigation - hidden on mobile, visible on md+ */}
           <div className="hidden md:flex items-center space-x-6">
-            <Link href="#features" className="text-gray-700 hover:text-primary transition-colors">
+            <Link href="#features" prefetch={false} className="text-gray-700 hover:text-primary transition-colors">
               Features
             </Link>
-            <Link href="#pricing" className="text-gray-700 hover:text-primary transition-colors">
+            <Link href="#pricing" prefetch={false} className="text-gray-700 hover:text-primary transition-colors">
               Pricing
             </Link>
             <Link 
               href="/login" 
+              prefetch={false}
               className="px-4 py-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
             >
               Login
@@ -31,6 +32,7 @@ export default function LedgerSnapLanding() {
           {/* Using vibrant orange accent for visibility and easy tapping on construction sites */}
           <Link 
             href="/login"
+            prefetch={false}
             className="md:hidden flex items-center justify-center w-12 h-12 rounded-lg border-2 border-orange-500 bg-orange-500 hover:bg-orange-600 transition-colors shadow-md active:scale-95"
             aria-label="Login"
           >
@@ -66,6 +68,7 @@ export default function LedgerSnapLanding() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link 
               href="/register"
+              prefetch={false}
               className="px-8 py-4 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors shadow-lg hover:shadow-xl"
             >
               Start Free Trial
@@ -145,6 +148,7 @@ export default function LedgerSnapLanding() {
           </p>
           <Link 
             href="/register"
+            prefetch={false}
             className="inline-block px-8 py-4 bg-white text-primary rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-lg hover:shadow-xl"
           >
             Start Free Trial

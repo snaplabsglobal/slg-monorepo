@@ -182,7 +182,7 @@ export function MlMonitoringClient() {
       <p className="text-xs text-gray-400">
         Rules auto-activate at 10 corrections. Learned rules are applied during receipt analysis
         (e.g. date format). See{' '}
-        <Link href="/settings" className="text-blue-600 hover:underline">
+        <Link href="/settings" prefetch={false} className="text-blue-600 hover:underline">
           Settings
         </Link>{' '}
         for more.

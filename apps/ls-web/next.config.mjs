@@ -9,6 +9,23 @@ const nextConfig = {
     // Use webpack instead of Turbopack to avoid "too many open files" error
     // Explicitly disable Turbopack by setting empty config
     turbopack: {},
+    // Prevent CDN/browser from caching dynamic pages (dev.ledgersnap.app updates)
+    async headers() {
+        return [
+            {
+                source: '/dashboard/:path*',
+                headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+            },
+            {
+                source: '/transactions/:path*',
+                headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+            },
+            {
+                source: '/login',
+                headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+            },
+        ]
+    },
     // Set output file tracing root to monorepo root for proper dependency resolution
     outputFileTracingRoot: path.join(__dirname, '../..'),
     // Configure images to allow R2 storage domains

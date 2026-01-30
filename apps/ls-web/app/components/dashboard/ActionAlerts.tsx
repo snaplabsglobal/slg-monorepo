@@ -43,6 +43,7 @@ export function ActionAlerts({ alerts }: ActionAlertsProps) {
           </div>
           <Link
             href={alert.href}
+            prefetch={false}
             className="shrink-0 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-800 transition-colors"
           >
             {alert.actionLabel}

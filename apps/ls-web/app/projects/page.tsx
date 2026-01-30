@@ -33,12 +33,14 @@ export default async function ProjectsPage() {
         <div className="flex gap-4">
           <Link
             href="/transactions"
+            prefetch={false}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             View Receipts →
           </Link>
           <Link
             href="/income"
+            prefetch={false}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             View Income →

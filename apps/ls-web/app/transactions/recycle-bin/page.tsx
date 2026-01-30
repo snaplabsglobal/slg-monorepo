@@ -68,6 +68,7 @@ export default async function RecycleBinPage() {
           </div>
           <Link
             href="/transactions"
+            prefetch={false}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             ← 返回主列表

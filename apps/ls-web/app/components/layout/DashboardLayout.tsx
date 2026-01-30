@@ -94,6 +94,7 @@ export function DashboardLayout({ children, userEmail, userName }: DashboardLayo
           <div className="p-4">
             <Link
               href="/transactions/upload"
+              prefetch={false}
               className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
             >
               <UploadIcon className="w-5 h-5" />
@@ -109,6 +110,7 @@ export function DashboardLayout({ children, userEmail, userName }: DashboardLayo
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={false}
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-xl transition-all
                     ${isActive 
