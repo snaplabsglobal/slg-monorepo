@@ -3,9 +3,9 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { TransactionDataForm, type TransactionDetail } from './TransactionDataForm'
+import { TransactionDataForm, type TransactionDataFormHandle, type TransactionDetail } from './TransactionDataForm'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
 
 // X icon SVG
@@ -36,6 +36,7 @@ export function MobileBottomSheet({
   const [sheetHeight, setSheetHeight] = useState('70%')
   const [fullscreenImage, setFullscreenImage] = useState(false)
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
+  const formRef = useRef<TransactionDataFormHandle>(null)
 
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
 
@@ -179,10 +180,14 @@ export function MobileBottomSheet({
 
           {transaction && (
             <>
-              {/* 照片预览（固定高度）*/}
+              {/* 顶部：收据预览图（点击可放大）— COO 移动端布局 */}
               {transaction.attachment_url && (
-                <div className="mb-6">
-                  <div className="relative h-64 bg-gray-100 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full mb-4 rounded-xl overflow-hidden bg-gray-100 block text-left"
+                  onClick={() => setFullscreenImage(true)}
+                >
+                  <div className="relative h-56">
                     <Image
                       src={transaction.attachment_url}
                       alt="Receipt"
@@ -192,23 +197,18 @@ export function MobileBottomSheet({
                       priority
                     />
                   </div>
-                  
-                  {/* 放大查看按钮 */}
-                  <button
-                    onClick={() => setFullscreenImage(true)}
-                    className="w-full mt-3 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
-                  >
-                    🔍 放大查看
-                  </button>
-                </div>
+                  <span className="block py-2 text-center text-sm text-gray-500">点击放大</span>
+                </button>
               )}
-              
-              {/* 详细信息 */}
+
+              {/* 中部：AI 核心数据 + 小 Edit 图标；底部单一确认 — CEO/COO 瘦身 */}
               <TransactionDataForm
+                ref={formRef}
                 transaction={transaction}
-                onSave={async () => {}}
+                onSave={handleSave}
                 onConfirm={handleConfirm}
                 saving={loading}
+                compactForMobile
               />
             </>
           )}
@@ -237,9 +237,9 @@ export function MobileBottomSheet({
             ) : (
               <button
                 onClick={handleConfirm}
-                className="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg"
+                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg transition-colors"
               >
-                ✓ 确认并存入 Review Queue
+                确认
               </button>
             )}
           </div>

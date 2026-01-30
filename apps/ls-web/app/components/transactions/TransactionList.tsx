@@ -4,6 +4,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { TransactionCard } from './TransactionCard'
 import { TransactionVisualCard } from './TransactionVisualCard'
+import { TransactionsTable } from './TransactionsTable'
 import { ResponsiveDetailPanel } from './ResponsiveDetailPanel'
 import { useRealtimeTransactions } from '@/app/hooks/useRealtimeTransactions'
 import { useHasMounted } from '@/app/hooks/useHasMounted'
@@ -97,6 +98,41 @@ export function TransactionList({
     })
   }
 
+  // Apply quick "需要审核" filter (TABLE_VIEW_FIX: filter buttons work)
+  if (filters.quick === 'needs-review') {
+    transactions = transactions.filter((t) => {
+      const s = deriveAsyncStatus(t as any)
+      return s === 'pending' || s === 'needs_review'
+    })
+  }
+
+  // Apply date range filter (today / week / month from FiltersBar quick)
+  if (filters.dateRange?.start != null || filters.dateRange?.end != null) {
+    const start = filters.dateRange.start ?? '0000-01-01'
+    const end = filters.dateRange.end ?? '9999-12-31'
+    transactions = transactions.filter((t) => {
+      const d = (t.transaction_date ?? '').toString().trim().substring(0, 10)
+      return d >= start && d <= end
+    })
+  }
+
+  // Apply sort (TABLE_VIEW_FIX: filters actually control order)
+  const sortBy = filters.sortBy ?? 'date'
+  const sortOrder = filters.sortOrder ?? 'desc'
+  transactions = [...transactions].sort((a, b) => {
+    let comparison = 0
+    if (sortBy === 'date') {
+      const da = (a.transaction_date ?? '').toString().substring(0, 10)
+      const db = (b.transaction_date ?? '').toString().substring(0, 10)
+      comparison = da.localeCompare(db)
+    } else if (sortBy === 'amount') {
+      comparison = (a.total_amount ?? 0) - (b.total_amount ?? 0)
+    } else if (sortBy === 'vendor') {
+      comparison = (a.vendor_name ?? '').localeCompare(b.vendor_name ?? '')
+    }
+    return sortOrder === 'asc' ? comparison : -comparison
+  })
+
   const orderedIds = useMemo(() => transactions.map((t) => t.id), [transactions])
   const hasMounted = useHasMounted()
 
@@ -159,8 +195,14 @@ export function TransactionList({
             />
           ))}
         </div>
+      ) : viewMode === 'list' && !showRestoreButton ? (
+        /* Table View (TABLE_VIEW_FIX: real HTML table, Excel/SQL style) */
+        <TransactionsTable
+          transactions={transactions}
+          onRowClick={(t) => setDetailId(t.id)}
+        />
       ) : (
-        /* List View (original) */
+        /* Recycle bin: stacked cards */
         <div className="space-y-4">
           {transactions.map((transaction) => (
             <TransactionCard

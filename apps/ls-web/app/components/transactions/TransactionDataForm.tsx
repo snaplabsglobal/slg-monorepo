@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { DeletedInfoBanner } from './DeletedInfoBanner'
 import {
@@ -8,7 +8,7 @@ import {
   yearsFromNow,
   recordCorrection,
 } from '@/app/lib/ml-correction'
-import { formatDateForInput } from '@/app/lib/utils/date'
+import { formatDateForInput, formatDate } from '@/app/lib/utils/date'
 
 export interface TransactionDetail {
   id: string
@@ -37,9 +37,19 @@ interface TransactionDataFormProps {
   saving?: boolean
   /** Recycle bin: all fields read-only, no Edit/Confirm */
   readOnly?: boolean
+  /** Mobile sheet: compact layout, no internal Confirm block; parent provides single Confirm */
+  compactForMobile?: boolean
 }
 
-export function TransactionDataForm({ transaction, onSave, onConfirm, saving, readOnly = false }: TransactionDataFormProps) {
+export interface TransactionDataFormHandle {
+  /** Save current edits if editing and dirty; returns true if a save was performed */
+  saveIfDirty: () => Promise<boolean>
+}
+
+function TransactionDataFormInner(
+  { transaction, onSave, onConfirm, saving, readOnly = false, compactForMobile = false }: TransactionDataFormProps,
+  ref: React.Ref<TransactionDataFormHandle>
+) {
   const [editing, setEditing] = useState(false)
   const [vendorName, setVendorName] = useState(transaction.vendor_name || '')
   const [date, setDate] = useState(() => formatDateForInput(transaction.transaction_date))
@@ -80,6 +90,83 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
     return typeof overall === 'number' ? overall : null
   }, [transaction.ai_confidence, transaction.raw_data])
 
+  const isDirty =
+    String(transaction.vendor_name || '') !== String(vendorName || '') ||
+    String(transaction.transaction_date || '') !== String(date || '') ||
+    String(transaction.total_amount ?? '') !== String(totalAmount) ||
+    String(transaction.category_user || '') !== String(categoryUser || '')
+
+  const editingRef = useRef(editing)
+  const isDirtyRef = useRef(isDirty)
+  editingRef.current = editing
+  isDirtyRef.current = isDirty
+
+  const performSave = async () => {
+    const updates = {
+      vendor_name: vendorName || null,
+      transaction_date: date,
+      total_amount: Number(totalAmount),
+      category_user: categoryUser || null,
+    }
+    await onSave(updates)
+    setEditing(false)
+
+    const correctionFields: string[] = []
+    if (String(transaction.vendor_name || '') !== String(vendorName || '')) correctionFields.push('vendor_name')
+    if (String(transaction.transaction_date || '') !== String(date || '')) correctionFields.push('transaction_date')
+    if (String(transaction.total_amount ?? '') !== String(totalAmount)) correctionFields.push('total_amount')
+    if (String(transaction.category_user || '') !== String(categoryUser || '')) correctionFields.push('category_user')
+
+    if (correctionFields.length > 0) {
+      const locationContext =
+        typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null
+      const result = await recordCorrection({
+        transactionId: transaction.id,
+        originalExtraction: {
+          vendor_name: transaction.vendor_name,
+          transaction_date: transaction.transaction_date,
+          total_amount: transaction.total_amount,
+          category_user: transaction.category_user,
+          ...(transaction.raw_data || {}),
+        },
+        correctedData: {
+          vendor_name: vendorName || null,
+          transaction_date: date,
+          total_amount: Number(totalAmount),
+          category_user: categoryUser || null,
+        },
+        correctionFields,
+        locationContext,
+      })
+      if (result.success) {
+        setMlRecorded(true)
+        setTimeout(() => setMlRecorded(false), 2500)
+      }
+      if (result.vendorPattern && result.vendorPattern.correctionCount >= 3 && transaction.vendor_name) {
+        setPatternVendor(transaction.vendor_name)
+        setPatternIsDefaultRule(result.vendorPattern.isDefaultRule)
+        setPatternDialogOpen(true)
+      }
+    }
+  }
+
+  const performSaveRef = useRef(performSave)
+  performSaveRef.current = performSave
+
+  useImperativeHandle(ref, () => ({
+    saveIfDirty: async (): Promise<boolean> => {
+      if (!editingRef.current || !isDirtyRef.current) return false
+      await performSaveRef.current()
+      return true
+    },
+  }), [])
+
+  const EditIcon = () => (
+    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  )
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -93,7 +180,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
         <div className="flex items-center gap-2">
           <StatusBadge transaction={transaction as any} />
         </div>
-        {!readOnly && !editing ? (
+        {!compactForMobile && !readOnly && !editing ? (
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -101,7 +188,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
           >
             Edit
           </button>
-        ) : !readOnly && editing ? (
+        ) : !compactForMobile && !readOnly && editing ? (
           <div className="flex gap-2">
             <button
               type="button"
@@ -119,57 +206,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
             </button>
             <button
               type="button"
-              onClick={async () => {
-                const updates = {
-                  vendor_name: vendorName || null,
-                  transaction_date: date,
-                  total_amount: Number(totalAmount),
-                  category_user: categoryUser || null,
-                }
-                await onSave(updates)
-                setEditing(false)
-
-                // LedgerSnap ML: record correction for training
-                const correctionFields: string[] = []
-                if (String(transaction.vendor_name || '') !== String(vendorName || '')) correctionFields.push('vendor_name')
-                if (String(transaction.transaction_date || '') !== String(date || '')) correctionFields.push('transaction_date')
-                if (String(transaction.total_amount ?? '') !== String(totalAmount)) correctionFields.push('total_amount')
-                if (String(transaction.category_user || '') !== String(categoryUser || '')) correctionFields.push('category_user')
-
-                if (correctionFields.length > 0) {
-                  const locationContext =
-                    typeof Intl !== 'undefined'
-                      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                      : null
-                  const result = await recordCorrection({
-                    transactionId: transaction.id,
-                    originalExtraction: {
-                      vendor_name: transaction.vendor_name,
-                      transaction_date: transaction.transaction_date,
-                      total_amount: transaction.total_amount,
-                      category_user: transaction.category_user,
-                      ...(transaction.raw_data || {}),
-                    },
-                    correctedData: {
-                      vendor_name: vendorName || null,
-                      transaction_date: date,
-                      total_amount: Number(totalAmount),
-                      category_user: categoryUser || null,
-                    },
-                    correctionFields,
-                    locationContext,
-                  })
-                  if (result.success) {
-                    setMlRecorded(true)
-                    setTimeout(() => setMlRecorded(false), 2500)
-                  }
-                  if (result.vendorPattern && result.vendorPattern.correctionCount >= 3 && transaction.vendor_name) {
-                    setPatternVendor(transaction.vendor_name)
-                    setPatternIsDefaultRule(result.vendorPattern.isDefaultRule)
-                    setPatternDialogOpen(true)
-                  }
-                }
-              }}
+              onClick={performSave}
               className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60"
               disabled={!!saving}
             >
@@ -178,6 +215,58 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
           </div>
         ) : null}
       </div>
+
+      {/* Mobile compact: core data (vendor, date, total) + small Edit icon — COO layout */}
+      {compactForMobile && !readOnly && (
+        <div className="mb-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs font-medium text-gray-500">供应商 · 日期 · 金额</span>
+            {!editing ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
+                aria-label="Edit"
+              >
+                <EditIcon />
+              </button>
+            ) : (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false)
+                    setVendorName(transaction.vendor_name || '')
+                    setDate(formatDateForInput(transaction.transaction_date))
+                    setTotalAmount(String(transaction.total_amount ?? 0))
+                    setCategoryUser(transaction.category_user || '')
+                  }}
+                  className="px-2 py-1 rounded text-xs border border-gray-200 hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={performSave}
+                  disabled={!!saving}
+                  className="px-2 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  保存
+                </button>
+              </div>
+            )}
+          </div>
+          {!editing ? (
+            <div className="space-y-1 text-sm">
+              <p className="font-medium text-gray-900">{transaction.vendor_name || '—'}</p>
+              <p className="text-gray-600">{formatDate(transaction.transaction_date)}</p>
+              <p className={`font-semibold ${tax.displayTotal < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
+                {tax.displayTotal < 0 ? '−' : ''}${Math.abs(tax.displayTotal).toFixed(2)} {transaction.currency || 'CAD'}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Recycle bin: full deleted info banner */}
       {readOnly && transaction.deleted_at && (
@@ -206,7 +295,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
         </div>
       )}
 
-      <div className="space-y-4 flex-1 overflow-auto pr-1">
+      <div className={`space-y-4 flex-1 overflow-auto pr-1 ${compactForMobile && !editing ? 'hidden' : ''}`}>
         <div className="grid grid-cols-1 gap-3">
           <label className="text-xs font-medium text-gray-600">Vendor</label>
           <input
@@ -339,7 +428,7 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
         </div>
       )}
 
-      {!readOnly && (
+      {!readOnly && !compactForMobile && (
         <div className="pt-4 border-t border-gray-200">
           <button
             type="button"
@@ -358,3 +447,4 @@ export function TransactionDataForm({ transaction, onSave, onConfirm, saving, re
   )
 }
 
+export const TransactionDataForm = forwardRef(TransactionDataFormInner)
