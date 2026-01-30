@@ -21,6 +21,19 @@ export function OfflineIndicator() {
     }
   }, [])
 
+  // 仅离线时禁用浏览器下拉刷新，避免整页重载导致 UI 消失
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (isOnline) {
+      document.body.style.overscrollBehaviorY = ''
+    } else {
+      document.body.style.overscrollBehaviorY = 'contain'
+    }
+    return () => {
+      document.body.style.overscrollBehaviorY = ''
+    }
+  }, [isOnline])
+
   if (isOnline) return null
 
   return (
