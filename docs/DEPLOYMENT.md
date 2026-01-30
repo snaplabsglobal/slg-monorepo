@@ -40,7 +40,7 @@ vercel dev
 NEXT_PUBLIC_SUPABASE_URL=https://kojxysllasxnybahbggu.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtvanh5c2xsYXN4bnliYWhiZ2d1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0NTM0NzMsImV4cCI6MjA4NDAyOTQ3M30.47L-ryoXYRbYDM42eQ7FXumCvnBTzdfV45BaasSTz24
 NEXT_PUBLIC_ENV=development
-GEMINI_API_KEY=AIzaSyD9yoKHgJY-SoNlBaSQu_Bx_TeWNUBECyI
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **Production 环境：**
@@ -48,7 +48,7 @@ GEMINI_API_KEY=AIzaSyD9yoKHgJY-SoNlBaSQu_Bx_TeWNUBECyI
 NEXT_PUBLIC_SUPABASE_URL=https://zqbudwdlwogimrzdmduq.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=[生产环境的 anon key]
 NEXT_PUBLIC_ENV=production
-GEMINI_API_KEY=AIzaSyD9yoKHgJY-SoNlBaSQu_Bx_TeWNUBECyI
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### 方法 3: 使用 Git Push（自动部署）

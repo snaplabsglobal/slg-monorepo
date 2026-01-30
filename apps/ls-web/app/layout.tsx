@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { ProcessingStatusBar } from '@/app/components/global/ProcessingStatusBar'
 
 export const metadata: Metadata = {
   title: 'LedgerSnap - 快速拍照识别',
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ProcessingStatusBar />
+      </body>
     </html>
   );
 }

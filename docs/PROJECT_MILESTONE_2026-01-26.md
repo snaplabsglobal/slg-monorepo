@@ -1,4 +1,5 @@
 # SnapLabs Global - 项目里程碑文档
+
 **Project Milestone Document**
 
 ---
@@ -15,6 +16,7 @@
 ## 🎯 产品矩阵
 
 ### 1. LedgerSnap（费用管理）
+
 ```yaml
 定位: B2B SaaS - 收据拍照识别
 目标用户: 中小企业、自由职业者
@@ -29,6 +31,7 @@ URL: https://dev.ledgersnap.app
 ```
 
 ### 2. JobSite Snap（工地考勤）
+
 ```yaml
 定位: B2B SaaS - 建筑工地数字化
 目标用户: 建筑承包商、工地经理
@@ -43,6 +46,7 @@ URL: https://dev.jobsitesnap.app
 ```
 
 ### 3. SnapLabs Corporate（公司官网）
+
 ```yaml
 定位: 企业门户网站
 目标用户: 投资人、客户、合作伙伴
@@ -60,6 +64,7 @@ URL: https://dev.snaplabs.global
 ## 🏗️ 技术架构
 
 ### 技术栈
+
 ```yaml
 前端框架: Next.js 16 (App Router)
 语言: TypeScript
@@ -70,7 +75,7 @@ URL: https://dev.snaplabs.global
 后端:
   数据库: Supabase (PostgreSQL)
   认证: Supabase Auth
-  存储: Supabase Storage
+  存储: Cluoudflare R2
   实时: Supabase Realtime
 
 部署:
@@ -85,6 +90,7 @@ URL: https://dev.snaplabs.global
 ```
 
 ### Monorepo 结构
+
 ```
 slg-monorepo/
 ├── apps/
@@ -101,17 +107,18 @@ slg-monorepo/
 ```
 
 ### 部署策略
+
 ```yaml
 分支策略:
   main (生产环境):
     → www.ledgersnap.app
-    → www.jobsitesnap.app
-    → www.snaplabs.global
-  
+    → www.jobsitesnap.com
+    → www.snaplabsglobal.com
+
   dev (开发环境):
     → dev.ledgersnap.app
-    → dev.jobsitesnap.app
-    → dev.snaplabs.global
+    → dev.jobsitesnap.com
+    → dev.snaplabsglobal.com
 
 Vercel 配置:
   - 每个应用独立的 Vercel 项目
@@ -196,12 +203,12 @@ Vercel 配置:
 ```yaml
 ✅ 商业模式设计
   核心逻辑: "领贴纸" → "成客户"
-  
+
   获客成本 (CAC): $0.40
     - 印刷成本: $0.05/张
     - 预期激活率: 12.5%
     - 10张贴纸 = 1个注册用户
-  
+
   对比 Google Ads: $5-10/点击
   ROI: 86倍 🚀
 
@@ -211,13 +218,13 @@ Vercel 配置:
     - 最多 5 个房产
     - 基础服务提醒
     - 基础报表
-  
+
   Pro ($29/月):
     - 无限设备和房产
     - 高级财务报表
     - API 访问
     - 白标定制
-  
+
   Enterprise (定制):
     - Pro + 专属支持
 
@@ -227,7 +234,7 @@ Vercel 配置:
     2. pre_activation_qr_codes - 预激活码
     3. user_subscription_tiers - 订阅层级
     4. 扩展字段到 equipment_registry
-  
+
   核心功能:
     - 批量 QR Code 生成（10,000+）
     - 扫码即绑定流程
@@ -446,7 +453,7 @@ Home Hero 免费贴纸引流:
   投资: $500 (10,000张 × $0.05)
   预期激活: 1,250 用户 (12.5%)
   CAC: $0.40
-  
+
   预期升级: 125 付费用户 (10%)
   年收入: $43,500 (125 × $29 × 12)
   ROI: 8,600% 🚀
@@ -454,7 +461,7 @@ Home Hero 免费贴纸引流:
 Service Snap QR:
   目标市场: 温哥华地区建筑维护
   目标用户: HVAC/锅炉维修师傅
-  
+
   Phase 1 目标:
     - 50 个注册师傅
     - 500 台注册设备
@@ -827,8 +834,8 @@ https://github.com/snaplabsglobal/slg-monorepo
 
 # 开发环境
 https://dev.ledgersnap.app
-https://dev.jobsitesnap.app
-https://dev.snaplabs.global
+https://dev.jobsitesnap.com
+https://dev.snaplabsglobal.com
 ```
 
 ---

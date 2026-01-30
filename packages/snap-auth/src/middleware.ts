@@ -19,7 +19,8 @@ export async function createClient(request: NextRequest) {
     },
   })
 
-  const supabase = createServerClient<Database>(
+  // See `src/server.ts` note on avoiding `never` inference.
+  const supabase = createServerClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

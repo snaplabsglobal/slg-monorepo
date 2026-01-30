@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LedgerSnap Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #0F172A;
+      --primary-light: #1E293B;
+      --accent: #10B981;
+      --accent-light: #34D399;
+      --blue: #3B82F6;
+      --orange: #F59E0B;
+      --red: #EF4444;
+      --gray-50: #F9FAFB;
+      --gray-100: #F3F4F6;
+      --gray-200: #E5E7EB;
+      --gray-300: #D1D5DB;
+      --gray-400: #9CA3AF;
+      --gray-600: #4B5563;
+      --gray-700: #374151;
+      --gray-800: #1F2937;
+      --gray-900: #111827;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+      min-height: 100vh;
+      color: var(--gray-800);
+      overflow-x: hidden;
+    }
+
+    .dashboard-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 2rem 0;
+      position: fixed;
+      height: 100vh;
+      left: 0;
+      top: 0;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+
+    .logo {
+      padding: 0 2rem 2rem 2rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 2rem;
+    }
+
+    .logo h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .nav-menu {
+      list-style: none;
+      padding: 0 1rem;
+    }
+
+    .nav-item {
+      margin-bottom: 0.5rem;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.875rem 1rem;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      font-size: 0.9375rem;
+    }
+
+    .nav-link:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .nav-link.active {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      opacity: 0.9;
+    }
+
+    .upload-cta {
+      margin: 2rem 1rem 0 1rem;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+    }
+
+    .upload-cta h3 {
+      color: white;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .upload-cta p {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .btn-upload {
+      width: 100%;
+      padding: 0.75rem;
+      background: white;
+      color: var(--accent);
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-upload:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      margin-left: 280px;
+      padding: 2rem;
+      animation: fadeIn 0.6s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .header {
+      margin-bottom: 2rem;
+    }
+
+    .header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 1rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 20px;
+      padding: 1.75rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      animation: slideUp 0.6s ease backwards;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: 0.1s; }
+    .stat-card:nth-child(2) { animation-delay: 0.2s; }
+    .stat-card:nth-child(3) { animation-delay: 0.3s; }
+    .stat-card:nth-child(4) { animation-delay: 0.4s; }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
+    }
+
+    .stat-card.blue::before {
+      background: linear-gradient(90deg, var(--blue) 0%, #60A5FA 100%);
+    }
+
+    .stat-card.orange::before {
+      background: linear-gradient(90deg, var(--orange) 0%, #FCD34D 100%);
+    }
+
+    .stat-card.red::before {
+      background: linear-gradient(90deg, var(--red) 0%, #FCA5A5 100%);
+    }
+
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .stat-card.green .stat-icon {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%);
+      color: var(--accent);
+    }
+
+    .stat-card.blue .stat-icon {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(96, 165, 250, 0.1) 100%);
+      color: var(--blue);
+    }
+
+    .stat-card.orange .stat-icon {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(252, 211, 77, 0.1) 100%);
+      color: var(--orange);
+    }
+
+    .stat-card.red .stat-icon {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(252, 165, 165, 0.1) 100%);
+      color: var(--red);
+    }
+
+    .stat-trend {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    .stat-trend.up {
+      color: var(--accent);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .stat-trend.down {
+      color: var(--red);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--gray-600);
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-subtitle {
+      font-size: 0.8125rem;
+      color: var(--gray-500);
+    }
+
+    /* Recent Uploads Section */
+    .section {
+      background: white;
+      border-radius: 24px;
+      padding: 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      animation: slideUp 0.6s ease backwards;
+      animation-delay: 0.5s;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .btn-view-all {
+      padding: 0.5rem 1rem;
+      background: var(--gray-100);
+      color: var(--gray-700);
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-view-all:hover {
+      background: var(--gray-200);
+    }
+
+    .receipts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .receipt-card {
+      border: 2px solid var(--gray-200);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      position: relative;
+      background: white;
+    }
+
+    .receipt-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+      transform: translateY(-4px);
+    }
+
+    .receipt-image {
+      width: 100%;
+      aspect-ratio: 4/3;
+      border-radius: 12px;
+      object-fit: cover;
+      margin-bottom: 1rem;
+      background: var(--gray-100);
+    }
+
+    .receipt-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .receipt-vendor {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--gray-900);
+    }
+
+    .confidence-badge {
+      padding: 0.25rem 0.625rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .confidence-badge.high {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent);
+    }
+
+    .confidence-badge.medium {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--orange);
+    }
+
+    .confidence-badge.low {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--red);
+    }
+
+    .receipt-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      color: var(--gray-600);
+      margin-bottom: 0.5rem;
+    }
+
+    .receipt-amount {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 0.75rem;
+    }
+
+    .receipt-category {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      background: var(--gray-100);
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+
+    .empty-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-text {
+      color: var(--gray-600);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-left: 0;
+        padding: 1.5rem;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header h2 {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h1>
+          <span class="logo-icon">📊</span>
+          LedgerSnap
+        </h1>
+      </div>
+      
+      <nav>
+        <ul class="nav-menu">
+          <li class="nav-item">
+            <a href="#" class="nav-link active">
+              <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link">
+              <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              Receipts
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link">
+              <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+              </svg>
+              Reports
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link">
+              <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+              </svg>
+              Team
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link">
+              <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              Settings
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="upload-cta">
+        <h3>Quick Upload</h3>
+        <p>Snap a photo or upload a receipt to get started</p>
+        <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+          + Upload Receipt
+        </button>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="header">
+        <h2>Welcome back, Patrick 👋</h2>
+        <p>Here's what's happening with your receipts today</p>
+      </header>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-header">
+            <div class="stat-icon">📊</div>
+            <div class="stat-trend up">
+              ↑ 12%
+            </div>
+          </div>
+          <div class="stat-label">Total Receipts</div>
+          <div class="stat-value">248</div>
+          <div class="stat-subtitle">+23 this month</div>
+        </div>
+
+        <div class="stat-card blue">
+          <div class="stat-header">
+            <div class="stat-icon">💰</div>
+            <div class="stat-trend up">
+              ↑ 8%
+            </div>
+          </div>
+          <div class="stat-label">Total Expenses</div>
+          <div class="stat-value">$12,450</div>
+          <div class="stat-subtitle">This month</div>
+        </div>
+
+        <div class="stat-card orange">
+          <div class="stat-header">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-trend down">
+              ↓ 3%
+            </div>
+          </div>
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-value">12</div>
+          <div class="stat-subtitle">Needs attention</div>
+        </div>
+
+        <div class="stat-card red">
+          <div class="stat-header">
+            <div class="stat-icon">✅</div>
+            <div class="stat-trend up">
+              ↑ 15%
+            </div>
+          </div>
+          <div class="stat-label">Avg Confidence</div>
+          <div class="stat-value">94%</div>
+          <div class="stat-subtitle">AI accuracy</div>
+        </div>
+      </div>
+
+      <!-- Recent Uploads -->
+      <section class="section">
+        <div class="section-header">
+          <h3 class="section-title">Recent Uploads</h3>
+          <button class="btn-view-all">View All →</button>
+        </div>
+
+        <div class="receipts-grid">
+          <!-- Receipt Card 1 -->
+          <div class="receipt-card">
+            <img src="https://images.unsplash.com/photo-1554224311-beee415c201f?w=400&h=300&fit=crop" alt="Receipt" class="receipt-image">
+            <div class="receipt-header">
+              <div class="receipt-vendor">Home Depot</div>
+              <span class="confidence-badge high">98%</span>
+            </div>
+            <div class="receipt-meta">
+              <span>Jan 27, 2026</span>
+              <span>GST: $2.25</span>
+            </div>
+            <div class="receipt-amount">$50.40 CAD</div>
+            <span class="receipt-category">
+              🏗️ Office Supplies
+            </span>
+          </div>
+
+          <!-- Receipt Card 2 -->
+          <div class="receipt-card">
+            <img src="https://images.unsplash.com/photo-1586339949216-35c2747cc36d?w=400&h=300&fit=crop" alt="Receipt" class="receipt-image">
+            <div class="receipt-header">
+              <div class="receipt-vendor">Shell Canada</div>
+              <span class="confidence-badge high">96%</span>
+            </div>
+            <div class="receipt-meta">
+              <span>Jan 26, 2026</span>
+              <span>GST: $3.00</span>
+            </div>
+            <div class="receipt-amount">$67.20 CAD</div>
+            <span class="receipt-category">
+              🚗 Transportation
+            </span>
+          </div>
+
+          <!-- Receipt Card 3 -->
+          <div class="receipt-card">
+            <img src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&h=300&fit=crop" alt="Receipt" class="receipt-image">
+            <div class="receipt-header">
+              <div class="receipt-vendor">Cactus Club</div>
+              <span class="confidence-badge medium">87%</span>
+            </div>
+            <div class="receipt-meta">
+              <span>Jan 25, 2026</span>
+              <span>GST: $4.00</span>
+            </div>
+            <div class="receipt-amount">$89.60 CAD</div>
+            <span class="receipt-category">
+              🍽️ Food & Dining
+            </span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Simple file upload handler
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        alert(`Selected: ${file.name}\nThis would upload to your backend!`);
+        // In production, this would call your upload API
+      }
+    });
+
+    // Add mobile menu toggle
+    const menuBtn = document.createElement('button');
+    menuBtn.innerHTML = '☰';
+    menuBtn.style.cssText = `
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 200;
+      background: white;
+      border: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    `;
+
+    if (window.innerWidth <= 768) {
+      menuBtn.style.display = 'block';
+      document.body.appendChild(menuBtn);
+      
+      menuBtn.addEventListener('click', () => {
+        document.querySelector('.sidebar').classList.toggle('open');
+      });
+    }
+  </script>
+</body>
+</html>

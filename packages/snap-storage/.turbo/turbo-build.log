@@ -1,0 +1,9 @@
+
+> @slo/snap-storage@1.0.0 build /home/pxjiang/slg-monorepo/packages/snap-storage
+> tsc
+
+src/server.ts(89,74): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'ArrayBuffer | Buffer<ArrayBufferLike>' is not assignable to parameter of type 'WithImplicitCoercion<string | ArrayLike<number>>'.
+      Type 'ArrayBuffer' is not assignable to type 'WithImplicitCoercion<string | ArrayLike<number>>'.
+ ELIFECYCLE  Command failed with exit code 2.

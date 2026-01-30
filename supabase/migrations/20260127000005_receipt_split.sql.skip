@@ -1,0 +1,500 @@
+-- ============================================
+-- LedgerSnap - 收据拆分功能数据库设计
+-- ============================================
+-- 设计理念：
+-- 1. "沉默运行" - 后台识别但不强迫用户
+-- 2. "按需开启" - 用户主动要求才拆分
+-- 3. "金额守恒" - 拆分金额必须等于原金额
+-- 4. "建筑行业优先" - 只对建筑收据做 Line Item 识别
+-- ============================================
+
+-- 1. 收据拆分记录表
+CREATE TABLE IF NOT EXISTS transaction_splits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- 关联原始收据
+  original_transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  
+  -- 拆分状态
+  split_status TEXT NOT NULL DEFAULT 'active' CHECK (split_status IN ('active', 'cancelled', 'superseded')),
+  
+  -- 拆分元数据
+  split_method TEXT NOT NULL CHECK (split_method IN ('user_manual', 'ai_suggested', 'imported')),
+  
+  -- 验证字段
+  total_split_amount_cents BIGINT NOT NULL,
+  validation_passed BOOLEAN DEFAULT false,
+  
+  -- 审计
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- 注意：同一张收据同时只能有一个 active 拆分
+  -- 这个约束通过唯一索引实现（见下方）
+);
+
+-- 2. 拆分明细表（子收据）
+CREATE TABLE IF NOT EXISTS split_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  split_id UUID NOT NULL REFERENCES transaction_splits(id) ON DELETE CASCADE,
+  
+  -- 拆分金额和标签
+  amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
+  tag_id UUID REFERENCES tags(id),
+  
+  -- 描述信息
+  description TEXT,                -- 用户可选填（如："木料部分"）
+  notes TEXT,
+  
+  -- 顺序
+  display_order INTEGER DEFAULT 0,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- 约束：金额必须为正
+  CONSTRAINT positive_amount CHECK (amount_cents > 0)
+);
+
+-- 3. Line Items 静默识别表（后台数据，用户不可见）
+CREATE TABLE IF NOT EXISTS line_items_silent (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  
+  -- Line Item 信息（从 OCR 提取）
+  item_description TEXT,           -- "2x4 木板"
+  item_quantity DECIMAL(10,2),     -- 10.00
+  item_unit_price_cents BIGINT,    -- 单价（分）
+  item_total_cents BIGINT,         -- 小计（分）
+  
+  -- AI 识别信息
+  confidence_score DECIMAL(3,2),   -- 置信度 0.00-1.00
+  ocr_raw_text TEXT,               -- 原始 OCR 文本
+  
+  -- 分类（ML 训练用）
+  ai_category TEXT,                -- AI 判断的类别（"lumber", "paint", "hardware"）
+  ai_category_confidence DECIMAL(3,2),
+  
+  -- 行业标识
+  industry_tag TEXT DEFAULT 'construction',
+  
+  -- 显示控制
+  is_visible_to_user BOOLEAN DEFAULT false,  -- 默认不显示给用户
+  
+  -- 元数据
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. 拆分建议表（AI 建议，但不强制）
+CREATE TABLE IF NOT EXISTS split_suggestions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id UUID NOT NULL REFERENCES transactions(id),
+  
+  -- AI 建议的拆分方案
+  suggested_splits JSONB NOT NULL,  -- [{tag_id, amount_cents, confidence}, ...]
+  overall_confidence DECIMAL(3,2),
+  
+  -- 建议来源
+  suggestion_source TEXT CHECK (suggestion_source IN (
+    'line_items_analysis',  -- 基于 Line Items 分析
+    'similar_receipts',     -- 基于相似收据
+    'user_patterns'         -- 基于用户历史模式
+  )),
+  
+  -- 用户反馈
+  user_action TEXT CHECK (user_action IN (
+    'pending',      -- 未处理
+    'accepted',     -- 接受建议
+    'rejected',     -- 拒绝建议
+    'modified'      -- 修改后接受
+  )),
+  user_feedback TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 索引优化
+-- ============================================
+
+-- 拆分记录查询
+CREATE INDEX idx_splits_transaction ON transaction_splits(original_transaction_id, split_status);
+CREATE INDEX idx_splits_org ON transaction_splits(organization_id, created_at DESC);
+
+-- 唯一约束：同一张收据同时只能有一个 active 拆分
+CREATE UNIQUE INDEX idx_splits_unique_active 
+  ON transaction_splits(original_transaction_id) 
+  WHERE split_status = 'active';
+
+-- 拆分明细查询
+CREATE INDEX idx_split_items_split ON split_items(split_id, display_order);
+CREATE INDEX idx_split_items_tag ON split_items(tag_id);
+
+-- Line Items 查询
+CREATE INDEX idx_line_items_transaction ON line_items_silent(transaction_id);
+CREATE INDEX idx_line_items_visible ON line_items_silent(transaction_id, is_visible_to_user);
+CREATE INDEX idx_line_items_industry ON line_items_silent(industry_tag, created_at DESC);
+
+-- 拆分建议查询
+CREATE INDEX idx_suggestions_transaction ON split_suggestions(transaction_id, user_action);
+
+-- ============================================
+-- RLS 策略
+-- ============================================
+
+ALTER TABLE transaction_splits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE split_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE line_items_silent ENABLE ROW LEVEL SECURITY;
+ALTER TABLE split_suggestions ENABLE ROW LEVEL SECURITY;
+
+-- Transaction Splits
+CREATE POLICY "Users can view own splits"
+  ON transaction_splits FOR SELECT
+  USING (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can manage own splits"
+  ON transaction_splits FOR ALL
+  USING (
+    organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Split Items
+CREATE POLICY "Users can view split items"
+  ON split_items FOR SELECT
+  USING (
+    split_id IN (
+      SELECT id FROM transaction_splits
+      WHERE organization_id IN (
+        SELECT organization_id FROM organization_members
+        WHERE user_id = auth.uid()
+      )
+    )
+  );
+
+-- Line Items (仅系统可见)
+CREATE POLICY "System only - Line Items"
+  ON line_items_silent FOR SELECT
+  USING (false);  -- 用户永远看不到（除非 is_visible_to_user = true）
+
+-- ============================================
+-- 核心函数
+-- ============================================
+
+-- 1. 创建收据拆分（带金额验证）
+CREATE OR REPLACE FUNCTION create_transaction_split(
+  p_transaction_id UUID,
+  p_split_items JSONB,  -- [{tag_id, amount_cents, description}, ...]
+  p_user_id UUID
+)
+RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_split_id UUID;
+  v_original_amount BIGINT;
+  v_split_total BIGINT := 0;
+  v_item JSONB;
+BEGIN
+  -- 获取原始收据金额（转换为分）
+  SELECT (total_amount * 100)::BIGINT INTO v_original_amount
+  FROM transactions
+  WHERE id = p_transaction_id;
+  
+  IF v_original_amount IS NULL THEN
+    RAISE EXCEPTION 'Transaction not found';
+  END IF;
+  
+  -- 计算拆分总金额
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_split_items)
+  LOOP
+    v_split_total := v_split_total + (v_item->>'amount_cents')::BIGINT;
+  END LOOP;
+  
+  -- 验证：拆分金额必须等于原始金额
+  IF v_split_total != v_original_amount THEN
+    RAISE EXCEPTION 'Split amount (%) does not match original amount (%)', 
+      v_split_total, v_original_amount;
+  END IF;
+  
+  -- 取消旧的拆分
+  UPDATE transaction_splits
+  SET split_status = 'superseded'
+  WHERE original_transaction_id = p_transaction_id
+    AND split_status = 'active';
+  
+  -- 创建新拆分
+  INSERT INTO transaction_splits (
+    original_transaction_id,
+    organization_id,
+    split_method,
+    total_split_amount_cents,
+    validation_passed,
+    created_by
+  )
+  SELECT 
+    p_transaction_id,
+    t.organization_id,
+    'user_manual',
+    v_split_total,
+    true,
+    p_user_id
+  FROM transactions t
+  WHERE t.id = p_transaction_id
+  RETURNING id INTO v_split_id;
+  
+  -- 插入拆分明细
+  INSERT INTO split_items (
+    split_id,
+    amount_cents,
+    tag_id,
+    description,
+    display_order
+  )
+  SELECT 
+    v_split_id,
+    (item->>'amount_cents')::BIGINT,
+    (item->>'tag_id')::UUID,
+    item->>'description',
+    ROW_NUMBER() OVER () - 1
+  FROM jsonb_array_elements(p_split_items) AS item;
+  
+  -- 自动为每个拆分项创建关联标签
+  INSERT INTO transaction_tags (
+    transaction_id,
+    tag_id,
+    source,
+    created_by
+  )
+  SELECT 
+    p_transaction_id,
+    (item->>'tag_id')::UUID,
+    'user_manual',
+    p_user_id
+  FROM jsonb_array_elements(p_split_items) AS item
+  ON CONFLICT (transaction_id, tag_id) DO NOTHING;
+  
+  RETURN v_split_id;
+END;
+$$;
+
+-- 2. 验证拆分金额
+CREATE OR REPLACE FUNCTION validate_split_amounts(
+  p_transaction_id UUID,
+  p_split_amounts JSONB  -- [{amount_cents: 100}, {amount_cents: 200}, ...]
+)
+RETURNS TABLE (
+  is_valid BOOLEAN,
+  original_amount BIGINT,
+  split_total BIGINT,
+  difference_cents BIGINT,
+  difference_display TEXT
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_original_amount BIGINT;
+  v_split_total BIGINT := 0;
+  v_difference BIGINT;
+  v_item JSONB;
+BEGIN
+  -- 获取原始金额（转换为分）
+  SELECT (total_amount * 100)::BIGINT INTO v_original_amount
+  FROM transactions
+  WHERE id = p_transaction_id;
+  
+  -- 计算拆分总额
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_split_amounts)
+  LOOP
+    v_split_total := v_split_total + (v_item->>'amount_cents')::BIGINT;
+  END LOOP;
+  
+  -- 计算差额
+  v_difference := v_split_total - v_original_amount;
+  
+  -- 返回结果
+  RETURN QUERY SELECT
+    v_difference = 0 AS is_valid,
+    v_original_amount,
+    v_split_total,
+    v_difference,
+    CASE 
+      WHEN v_difference = 0 THEN 'Perfect match'
+      WHEN v_difference > 0 THEN 'Over by $' || (v_difference::DECIMAL / 100)::TEXT
+      ELSE 'Under by $' || (ABS(v_difference)::DECIMAL / 100)::TEXT
+    END AS difference_display;
+END;
+$$;
+
+-- 3. 获取收据的拆分信息
+CREATE OR REPLACE FUNCTION get_transaction_split(p_transaction_id UUID)
+RETURNS TABLE (
+  split_id UUID,
+  item_tag_name TEXT,
+  item_amount_cents BIGINT,
+  item_amount_display TEXT,
+  item_description TEXT
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT 
+    ts.id,
+    t.name,
+    si.amount_cents,
+    '$' || (si.amount_cents::DECIMAL / 100)::TEXT,
+    si.description
+  FROM transaction_splits ts
+  JOIN split_items si ON ts.id = si.split_id
+  LEFT JOIN tags t ON si.tag_id = t.id
+  WHERE ts.original_transaction_id = p_transaction_id
+    AND ts.split_status = 'active'
+  ORDER BY si.display_order;
+$$;
+
+-- 4. 静默存储 Line Items（建筑行业）
+CREATE OR REPLACE FUNCTION store_line_items_silent(
+  p_transaction_id UUID,
+  p_line_items JSONB  -- OCR 识别的 Line Items
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_count INTEGER := 0;
+  v_item JSONB;
+  v_vendor TEXT;
+  v_is_construction BOOLEAN;
+BEGIN
+  -- 检查是否是建筑行业供应商
+  SELECT vendor_name INTO v_vendor
+  FROM transactions
+  WHERE id = p_transaction_id;
+  
+  -- 判断是否是建筑供应商（简化版，实际应该用更复杂的逻辑）
+  v_is_construction := v_vendor ILIKE ANY(ARRAY[
+    '%home depot%',
+    '%lowes%',
+    '%lumber%',
+    '%rona%',
+    '%home hardware%'
+  ]);
+  
+  -- 只对建筑行业收据存储 Line Items
+  IF v_is_construction THEN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_line_items)
+    LOOP
+      INSERT INTO line_items_silent (
+        transaction_id,
+        item_description,
+        item_quantity,
+        item_unit_price_cents,
+        item_total_cents,
+        confidence_score,
+        industry_tag,
+        is_visible_to_user  -- 默认 false，用户看不到
+      ) VALUES (
+        p_transaction_id,
+        v_item->>'description',
+        (v_item->>'quantity')::DECIMAL,
+        (v_item->>'unit_price_cents')::BIGINT,
+        (v_item->>'total_cents')::BIGINT,
+        (v_item->>'confidence')::DECIMAL,
+        'construction',
+        false  -- 不显示给用户
+      );
+      v_count := v_count + 1;
+    END LOOP;
+  END IF;
+  
+  RETURN v_count;
+END;
+$$;
+
+-- 5. 生成拆分建议（基于 Line Items 或历史模式）
+CREATE OR REPLACE FUNCTION generate_split_suggestion(
+  p_transaction_id UUID,
+  p_user_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_suggestion JSONB;
+  v_has_line_items BOOLEAN;
+BEGIN
+  -- 检查是否有 Line Items
+  SELECT EXISTS(
+    SELECT 1 FROM line_items_silent
+    WHERE transaction_id = p_transaction_id
+  ) INTO v_has_line_items;
+  
+  IF v_has_line_items THEN
+    -- 基于 Line Items 生成建议（这里简化，实际需要更复杂的 AI）
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'tag_id', null,  -- 需要 AI 推断合适的标签
+        'amount_cents', item_total_cents,
+        'description', item_description,
+        'confidence', confidence_score
+      )
+    ) INTO v_suggestion
+    FROM line_items_silent
+    WHERE transaction_id = p_transaction_id;
+  ELSE
+    -- 基于用户历史模式生成建议
+    v_suggestion := NULL;  -- 这里需要实现基于历史的建议算法
+  END IF;
+  
+  RETURN v_suggestion;
+END;
+$$;
+
+-- 6. 取消拆分
+CREATE OR REPLACE FUNCTION cancel_transaction_split(p_split_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE transaction_splits
+  SET split_status = 'cancelled'
+  WHERE id = p_split_id
+    AND split_status = 'active';
+  
+  RETURN FOUND;
+END;
+$$;
+
+-- ============================================
+-- 触发器
+-- ============================================
+
+CREATE OR REPLACE FUNCTION update_split_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_splits_timestamp
+  BEFORE UPDATE ON transaction_splits
+  FOR EACH ROW
+  EXECUTE FUNCTION update_split_updated_at();
+
+CREATE TRIGGER update_line_items_timestamp
+  BEFORE UPDATE ON line_items_silent
+  FOR EACH ROW
+  EXECUTE FUNCTION update_split_updated_at();
