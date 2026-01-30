@@ -149,23 +149,38 @@ export function useRealtimeTransactions(organizationId?: string) {
           
           // Update state using upsert logic (Map by ID) to prevent duplicates
           if (mountedRef.current) {
-            // Use functional update with Map-based upsert
+            // Data lock: critical fields only when existing tx is already "Ready" (approved)
+            // to avoid flicker from minor Realtime updates (e.g. ai_confidence, raw_data)
+            const CRITICAL_KEYS = [
+              'deleted_at', 'voided_at', 'status', 'needs_review', 'vendor_name',
+              'total_amount', 'transaction_date', 'tax_details', 'updated_at',
+              'category_user', 'attachment_url', 'is_suspected_duplicate',
+            ] as const
+
             setTransactions((prev) => {
               const transactionMap = new Map<string, Transaction>()
-              // Add existing transactions (only non-deleted ones)
               prev.forEach((tx) => {
-                // Filter out deleted items immediately (eye-out-of-sight)
                 if (!tx.deleted_at) {
                   transactionMap.set(tx.id, tx)
                 }
               })
-              
-              // Upsert new/updated transaction (only if not deleted)
+
               if (payload.new) {
                 const newTx = payload.new as Transaction
-                // Only add if not deleted (or if deleted_at was cleared - restore)
                 if (!newTx.deleted_at) {
-                  transactionMap.set(newTx.id, newTx)
+                  const existing = transactionMap.get(newTx.id)
+                  const isStable = existing?.status === 'approved'
+                  if (isStable && existing) {
+                    const merged = { ...existing } as Transaction
+                    CRITICAL_KEYS.forEach((key) => {
+                      if (key in newTx && (newTx as any)[key] !== undefined) {
+                        (merged as any)[key] = (newTx as any)[key]
+                      }
+                    })
+                    transactionMap.set(newTx.id, merged)
+                  } else {
+                    transactionMap.set(newTx.id, newTx)
+                  }
                 } else {
                   transactionMap.delete(newTx.id)
                 }

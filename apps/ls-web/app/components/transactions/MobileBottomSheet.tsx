@@ -1,5 +1,5 @@
 // components/transactions/MobileBottomSheet.tsx
-// 移动端底部抽屉组件
+// 移动端底部抽屉：两段式拉伸 (60% 快速浏览 / 95% 全屏编辑)
 
 'use client'
 
@@ -7,6 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { TransactionDataForm, type TransactionDataFormHandle, type TransactionDetail } from './TransactionDataForm'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
+
+const SNAP_QUICK = '60%'   // 默认：缩略图 + 核心数据
+const SNAP_FULL = '95vh'   // 全屏：编辑 / 地址等详情
 
 // X icon SVG
 const XIcon = () => (
@@ -33,12 +36,22 @@ export function MobileBottomSheet({
   const [loading, setLoading] = useState(false)
   const [transaction, setTransaction] = useState<TransactionDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [sheetHeight, setSheetHeight] = useState('70%')
+  const [sheetHeight, setSheetHeight] = useState(SNAP_QUICK)
   const [fullscreenImage, setFullscreenImage] = useState(false)
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
+  const [addressExpanded, setAddressExpanded] = useState(false)
   const formRef = useRef<TransactionDataFormHandle>(null)
 
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
+  const isFullHeight = sheetHeight === SNAP_FULL
+
+  /** 点开时默认 60%；切换交易时重置 */
+  useEffect(() => {
+    if (transactionId != null && isOpen) {
+      setSheetHeight(SNAP_QUICK)
+      setAddressExpanded(false)
+    }
+  }, [transactionId, isOpen])
 
   useEffect(() => {
     if (!transactionId || !isOpen) {
@@ -148,6 +161,26 @@ export function MobileBottomSheet({
 
   if (!isOpen) return null
 
+  const toggleSnap = () => {
+    setSheetHeight((h) => (h === SNAP_FULL ? SNAP_QUICK : SNAP_FULL))
+  }
+  const handleRequestExpand = () => setSheetHeight(SNAP_FULL)
+  const rawData = transaction?.raw_data as Record<string, unknown> | undefined
+  const vendorAddress =
+    typeof rawData?.vendor_address === 'string'
+      ? rawData.vendor_address
+      : typeof rawData?.address === 'string'
+        ? rawData.address
+        : typeof rawData?.store_address === 'string'
+          ? rawData.store_address
+          : null
+  const gstNumber =
+    typeof rawData?.gst_number === 'string'
+      ? rawData.gst_number
+      : typeof rawData?.gst_hst_number === 'string'
+        ? rawData.gst_hst_number
+        : null
+
   return (
     <>
       {/* 背景遮罩 */}
@@ -156,20 +189,28 @@ export function MobileBottomSheet({
         onClick={onClose}
       />
       
-      {/* Bottom Sheet */}
+      {/* Bottom Sheet — 两段式 60% / 95% */}
       <div
         className={`
           fixed bottom-0 left-0 right-0 z-50
           bg-white rounded-t-3xl
           transform transition-transform duration-300 ease-out
+          flex flex-col
           ${isOpen ? 'translate-y-0' : 'translate-y-full'}
         `}
-        style={{ height: sheetHeight, maxHeight: '90vh' }}
+        style={{ height: sheetHeight, maxHeight: '100vh' }}
       >
-        {/* 顶部拖拽条 */}
-        <div className="sticky top-0 bg-white rounded-t-3xl z-10 pb-2">
-          <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mt-3 mb-4" />
-          
+        {/* 顶部拖拽条：点击切换高度 */}
+        <div className="flex-shrink-0 bg-white rounded-t-3xl z-10 pb-2">
+          <button
+            type="button"
+            onClick={toggleSnap}
+            className="w-full pt-3 pb-2 flex flex-col items-center gap-1 cursor-grab active:cursor-grabbing"
+            aria-label={isFullHeight ? '收起' : '上滑展开'}
+          >
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+            <span className="text-xs text-gray-400">{isFullHeight ? '下滑收起' : '上滑展开'}</span>
+          </button>
           <div className="flex items-center justify-between px-6 pb-2">
             <h2 className="text-lg font-bold text-gray-900">收据详情</h2>
             <button
@@ -181,8 +222,8 @@ export function MobileBottomSheet({
           </div>
         </div>
         
-        {/* 可滚动内容 */}
-        <div className="overflow-y-auto h-full pb-24 px-6" style={{ maxHeight: `calc(${sheetHeight} - 80px)` }}>
+        {/* 可滚动内容；pb-28 避免被底部按钮遮挡 */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-28">
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-500">加载中...</div>
@@ -197,7 +238,6 @@ export function MobileBottomSheet({
 
           {transaction && (
             <>
-              {/* 顶部：收据预览图（点击可放大）— COO 移动端布局 */}
               {transaction.attachment_url && (
                 <button
                   type="button"
@@ -218,7 +258,30 @@ export function MobileBottomSheet({
                 </button>
               )}
 
-              {/* 中部：AI 核心数据 + 小 Edit 图标；底部单一确认 — CEO/COO 瘦身 */}
+              {/* 供应商地址（CRA 合规）：智能折叠 */}
+              {(vendorAddress || gstNumber) && (
+                <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-medium text-gray-500 mb-1">供应商信息（备审计）</p>
+                  {vendorAddress && (
+                    <button
+                      type="button"
+                      onClick={() => setAddressExpanded((e) => !e)}
+                      className="text-left w-full text-sm text-gray-700"
+                    >
+                      {addressExpanded ? (
+                        vendorAddress
+                      ) : (
+                        <span className="line-clamp-1">{vendorAddress}</span>
+                      )}
+                      <span className="ml-1 text-gray-400 text-xs">{addressExpanded ? '收起' : '展开'}</span>
+                    </button>
+                  )}
+                  {gstNumber && (
+                    <p className="text-xs text-gray-600 mt-1">GST/HST # {gstNumber}</p>
+                  )}
+                </div>
+              )}
+
               <TransactionDataForm
                 ref={formRef}
                 transaction={transaction}
@@ -226,12 +289,13 @@ export function MobileBottomSheet({
                 onConfirm={handleConfirm}
                 saving={loading}
                 compactForMobile
+                onStartEdit={handleRequestExpand}
               />
             </>
           )}
         </div>
         
-        {/* 底部固定按钮 */}
+        {/* 底部固定按钮；有待处理项时显示红色角标 */}
         {transaction && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-10">
             {isRecycleBin ? (
@@ -254,9 +318,14 @@ export function MobileBottomSheet({
             ) : (
               <button
                 onClick={handleConfirm}
-                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg transition-colors"
+                className="relative w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg transition-colors"
               >
                 确认
+                {(transaction.needs_review || transaction.status === 'error' || (transaction as any).is_suspected_duplicate) && (
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white ring-2 ring-white">
+                    1
+                  </span>
+                )}
               </button>
             )}
           </div>

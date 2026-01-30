@@ -6,7 +6,8 @@
     "dev": "next dev --webpack -p 3000",
     "build": "next build --webpack",
     "start": "next start -p 3001",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",

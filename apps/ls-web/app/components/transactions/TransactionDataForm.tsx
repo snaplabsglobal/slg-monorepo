@@ -39,6 +39,8 @@ interface TransactionDataFormProps {
   readOnly?: boolean
   /** Mobile sheet: compact layout, no internal Confirm block; parent provides single Confirm */
   compactForMobile?: boolean
+  /** Mobile: when user taps Edit, parent can expand sheet to full height */
+  onStartEdit?: () => void
 }
 
 export interface TransactionDataFormHandle {
@@ -47,7 +49,7 @@ export interface TransactionDataFormHandle {
 }
 
 function TransactionDataFormInner(
-  { transaction, onSave, onConfirm, saving, readOnly = false, compactForMobile = false }: TransactionDataFormProps,
+  { transaction, onSave, onConfirm, saving, readOnly = false, compactForMobile = false, onStartEdit }: TransactionDataFormProps,
   ref: React.Ref<TransactionDataFormHandle>
 ) {
   const [editing, setEditing] = useState(false)
@@ -161,12 +163,6 @@ function TransactionDataFormInner(
     },
   }), [])
 
-  const EditIcon = () => (
-    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-    </svg>
-  )
-
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -180,15 +176,18 @@ function TransactionDataFormInner(
         <div className="flex items-center gap-2">
           <StatusBadge transaction={transaction as any} />
         </div>
-        {!compactForMobile && !readOnly && !editing ? (
+        {!readOnly && !editing ? (
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              onStartEdit?.()
+              setEditing(true)
+            }}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
           >
             Edit
           </button>
-        ) : !compactForMobile && !readOnly && editing ? (
+        ) : !readOnly && editing ? (
           <div className="flex gap-2">
             <button
               type="button"
@@ -215,58 +214,6 @@ function TransactionDataFormInner(
           </div>
         ) : null}
       </div>
-
-      {/* Mobile compact: core data (vendor, date, total) + small Edit icon — COO layout */}
-      {compactForMobile && !readOnly && (
-        <div className="mb-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-medium text-gray-500">供应商 · 日期 · 金额</span>
-            {!editing ? (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
-                aria-label="Edit"
-              >
-                <EditIcon />
-              </button>
-            ) : (
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(false)
-                    setVendorName(transaction.vendor_name || '')
-                    setDate(formatDateForInput(transaction.transaction_date))
-                    setTotalAmount(String(transaction.total_amount ?? 0))
-                    setCategoryUser(transaction.category_user || '')
-                  }}
-                  className="px-2 py-1 rounded text-xs border border-gray-200 hover:bg-gray-100"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={performSave}
-                  disabled={!!saving}
-                  className="px-2 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  保存
-                </button>
-              </div>
-            )}
-          </div>
-          {!editing ? (
-            <div className="space-y-1 text-sm">
-              <p className="font-medium text-gray-900">{transaction.vendor_name || '—'}</p>
-              <p className="text-gray-600">{formatDate(transaction.transaction_date)}</p>
-              <p className={`font-semibold ${tax.displayTotal < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
-                {tax.displayTotal < 0 ? '−' : ''}${Math.abs(tax.displayTotal).toFixed(2)} {transaction.currency || 'CAD'}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      )}
 
       {/* Recycle bin: full deleted info banner */}
       {readOnly && transaction.deleted_at && (
@@ -295,7 +242,8 @@ function TransactionDataFormInner(
         </div>
       )}
 
-      <div className={`space-y-4 flex-1 overflow-auto pr-1 ${compactForMobile && !editing ? 'hidden' : ''}`}>
+      {/* Full form: mobile shows all fields read-only by default; Edit unlocks inputs (UI parity with desktop) */}
+      <div className="space-y-4 flex-1 overflow-auto pr-1">
         <div className="grid grid-cols-1 gap-3">
           <label className="text-xs font-medium text-gray-600">Vendor</label>
           <input

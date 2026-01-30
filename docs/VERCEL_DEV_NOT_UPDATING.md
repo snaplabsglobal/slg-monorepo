@@ -2,6 +2,29 @@
 
 push 到 `dev` 后，若 https://dev.ledgersnap.app 仍显示旧内容，按下面顺序排查。
 
+## 0. 确认你 push 的分支
+
+- 你刚才 push 的是 **`origin/dev`**（分支名：`dev`）。
+- Vercel 的 **Dev 环境 / Preview** 必须部署 **`dev`** 分支，`dev.ledgersnap.app` 必须指向该部署。
+- 在 Vercel Dashboard → **Settings → Git** 确认：
+  - **Production Branch**：若 dev 域名用的是 Production，则这里应为 `dev`；否则在 **Settings → Domains** 里看 `dev.ledgersnap.app` 绑定到哪个分支/部署。
+
+## 0.1 Vercel 环境变量清单（ls-web）
+
+在 **Vercel 项目 → Settings → Environment Variables** 中，为 **Preview**（或 Dev）环境配置：
+
+| 变量名 | 必填 | 说明 |
+|--------|------|------|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase 项目 URL（Dev 用 dev 项目） |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase Anon Key |
+| `NEXT_PUBLIC_ENV` | ✅ | 填 `development`（Dev 环境） |
+| `GEMINI_API_KEY` | ✅ | 收据 AI 分析；未配置会导致 `/api/receipts/[id]/analyze` 500 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 可选 | 仅当使用 Cron 清理回收站时需要 |
+| `CRON_SECRET` | 可选 | 仅当使用 Vercel Cron 时需要 |
+| `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_R2_*` 或 `R2_*` | 可选 | 上传到 R2 时需要 |
+
+漏配 **Supabase URL/Key** 可能导致 SSR/Realtime 报错（如 React #419）；漏配 **GEMINI_API_KEY** 会导致收据分析 500。添加或修改环境变量后需 **Redeploy** 才会生效。
+
 ## 1. 确认是 Vercel 部署问题还是缓存问题
 
 ### A. 看 Vercel 是否已用最新 commit 部署

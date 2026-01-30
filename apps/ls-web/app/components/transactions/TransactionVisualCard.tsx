@@ -1,12 +1,11 @@
 // components/transactions/TransactionVisualCard.tsx
-// Visual Card View - 卡片模式（替代大长条列表）
+// Visual Card View - 卡片模式（UX：弱化 GST、状态圆点、层级清晰）
 
 'use client'
 
 import { useState } from 'react'
 import Image from 'next/image'
 import type { Transaction } from './TransactionList'
-import { StatusBadge } from './StatusBadge'
 import { deriveAsyncStatus } from './status'
 import { formatDateOnly } from '@/app/lib/utils/format'
 
@@ -38,28 +37,54 @@ function formatAmount(amount: number, currency: string = 'CAD'): string {
   }).format(amount)
 }
 
+/** 状态小圆点：绿=已就绪，黄=待审核，蓝=解析中，红=需关注（不遮挡缩略图） */
+function StatusDot({ status }: { status: ReturnType<typeof deriveAsyncStatus> }) {
+  const dotClass =
+    status === 'approved'
+      ? 'bg-green-500'
+      : status === 'needs_review' || status === 'warning'
+        ? 'bg-amber-500'
+        : status === 'pending'
+          ? 'bg-blue-500'
+          : 'bg-red-500'
+  return (
+    <span
+      className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm ${dotClass}`}
+      title={status === 'approved' ? '数据已就绪' : status === 'needs_review' || status === 'warning' ? '待审核' : status === 'pending' ? '解析中' : '需关注'}
+      aria-hidden
+    />
+  )
+}
+
 export function TransactionVisualCard({ transaction, onClick, priority }: TransactionVisualCardProps) {
   const [imageError, setImageError] = useState(false)
-  
-  // Get tax details
+  const asyncStatus = deriveAsyncStatus(transaction as any)
+
+  // Get tax details (for grey footnote, not green box)
   const taxDetails = (transaction as any).tax_details || {}
-  const gstAmount = typeof taxDetails.gst_amount === 'number' 
-    ? taxDetails.gst_amount 
-    : (Number(taxDetails.gst_cents || 0) / 100)
-  
-  // Get project name from raw_data or project_id
-  const projectName = (transaction as any).project_name || 
-    (transaction as any).raw_data?.project?.name || 
-    null
+  const gstAmount = typeof taxDetails.gst_amount === 'number'
+    ? taxDetails.gst_amount
+    : Number(taxDetails.gst_cents || 0) / 100
+
+  const projectName =
+    (transaction as any).project_name || (transaction as any).raw_data?.project?.name || null
+
+  const isRefund =
+    Boolean((transaction as any).raw_data?.is_refund) ||
+    (transaction.direction === 'expense' && (transaction.total_amount ?? 0) < 0)
+  const isIncome = transaction.direction === 'income'
+  const amount = Math.abs(transaction.total_amount || 0)
+  const totalColorClass = isIncome ? 'text-green-700' : isRefund ? 'text-emerald-700' : 'text-gray-900'
+  const sign = isIncome ? '+' : isRefund ? '−' : ''
 
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer overflow-hidden group"
+      className="bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer overflow-hidden group"
     >
       <div className="flex">
-        {/* 左侧：收据缩略图（1/3）*/}
-        <div className="w-1/3 relative bg-gray-100 min-h-[120px]">
+        {/* 左侧：收据缩略图，无文字遮挡；仅右上角状态小圆点 */}
+        <div className="w-1/3 relative bg-gray-100 min-h-[120px] shrink-0">
           {(transaction as any).attachment_url && !imageError ? (
             <Image
               src={(transaction as any).attachment_url}
@@ -75,41 +100,20 @@ export function TransactionVisualCard({ transaction, onClick, priority }: Transa
               <span className="text-4xl">📄</span>
             </div>
           )}
-          
-          {/* 状态角标 */}
-          <div className="absolute top-2 left-2">
-            <StatusBadge 
-              transaction={transaction as any} 
-            />
-          </div>
+          <StatusDot status={asyncStatus} />
         </div>
-        
-        {/* 右侧：信息（2/3）*/}
-        <div className="flex-1 p-4 flex flex-col justify-between min-h-[120px]">
-          {/* 顶部：供应商 + Refund 角标 + 日期 */}
+
+        {/* 右侧：Vendor（加粗）→ Date（灰）→ Total（大字）→ GST 灰色小字；hover 显示可抵扣 */}
+        <div className="flex-1 p-4 flex flex-col justify-between min-h-[120px] min-w-0">
           <div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="font-bold text-lg text-gray-900 line-clamp-1">
-                {transaction.vendor_name || 'Unknown Vendor'}
-              </h3>
-              {((): boolean => {
-                const raw = (transaction as any).raw_data
-                return Boolean(raw?.is_refund) || (transaction.direction === 'expense' && (transaction.total_amount ?? 0) < 0)
-              })() && (
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
-                  Refund
-                </span>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-3 text-sm text-gray-600 flex-wrap">
-              {/* 日期 */}
+            <h3 className="font-bold text-gray-900 line-clamp-1 text-lg">
+              {transaction.vendor_name || 'Unknown Vendor'}
+            </h3>
+            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1 flex-wrap">
               <div className="flex items-center gap-1">
                 <ClockIcon />
                 <span>{formatDateOnly(transaction.transaction_date)}</span>
               </div>
-              
-              {/* 项目 */}
               {projectName && (
                 <div className="flex items-center gap-1">
                   <BuildingIcon />
@@ -117,38 +121,23 @@ export function TransactionVisualCard({ transaction, onClick, priority }: Transa
                 </div>
               )}
             </div>
+            {isRefund && (
+              <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Refund
+              </span>
+            )}
           </div>
-          
-          {/* 底部：金额 + GST（Refund = 绿色负号） */}
-          <div className="flex items-end justify-between mt-3">
-            {/* 总额 */}
-            <div>
-              <p className="text-xs text-gray-500 mb-0.5">Total</p>
-              {(() => {
-                const isRefund = Boolean((transaction as any).raw_data?.is_refund) || (transaction.direction === 'expense' && (transaction.total_amount ?? 0) < 0)
-                const isIncome = transaction.direction === 'income'
-                const amount = Math.abs(transaction.total_amount || 0)
-                const colorClass = isIncome ? 'text-green-700' : isRefund ? 'text-emerald-700' : 'text-gray-900'
-                const sign = isIncome ? '+' : isRefund ? '−' : ''
-                return (
-                  <p className={`text-2xl font-bold ${colorClass}`}>
-                    {sign}{formatAmount(amount, transaction.currency)}
-                  </p>
-                )
-              })()}
-            </div>
-            
-            {/* GST（加拿大特色 - 高亮）⭐ */}
+
+          {/* Total 为主视觉；GST 弱化为灰色小字 */}
+          <div className="mt-3">
+            <p className={`text-xl font-bold ${totalColorClass}`}>
+              {sign}{formatAmount(amount, transaction.currency)}
+            </p>
             {gstAmount > 0 && (
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 px-3 py-2 rounded-lg border border-green-200">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-green-700 font-medium">GST</span>
-                  <span className="text-base font-bold text-green-700">
-                    {formatAmount(gstAmount, transaction.currency)}
-                  </span>
-                </div>
-                <p className="text-xs text-green-600">可抵扣</p>
-              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                (Incl. GST {formatAmount(gstAmount, transaction.currency)}
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">可抵扣</span>)
+              </p>
             )}
           </div>
         </div>

@@ -10,9 +10,14 @@
         "lint": "turbo run lint",
         "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
         "type-check": "turbo run type-check",
-        "clean": "turbo run clean && rm -rf node_modules"
+        "clean": "turbo run clean && rm -rf node_modules",
+        "prepare": "husky install",
+        "check": "pnpm type-check && pnpm build",
+        "check-before-push": "pnpm type-check && pnpm build && pnpm lint",
+        "quick-check": "pnpm type-check"
     },
     "devDependencies": {
+        "husky": "^9.1.7",
         "@types/node": "^20.19.30",
         "@types/react": "^19.2.9",
         "@types/react-dom": "^19.2.3",
