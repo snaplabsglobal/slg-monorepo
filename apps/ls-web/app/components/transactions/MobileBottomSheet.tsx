@@ -112,6 +112,23 @@ export function MobileBottomSheet({
     setTimeout(() => onClose(), 300)
   }
 
+  const handleSave = async (updates: Partial<TransactionDetail>) => {
+    if (!transaction?.id) return
+    try {
+      const res = await fetch(`/api/transactions/${transaction.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      const json = await res.json()
+      if (res.ok && json.transaction) {
+        setTransaction(json.transaction)
+      }
+    } catch (e) {
+      console.error('Failed to save transaction:', e)
+    }
+  }
+
   const handleRestore = async () => {
     if (!transaction?.id) return
     try {
