@@ -3,8 +3,8 @@
 
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@slo/snap-auth'
-import { getUserSubscription } from '@/app/lib/permissions/permissions'
-import { UpgradeModal } from '@/app/components/upgrade/upgrade-modal'
+import { getUserSubscription } from '@/lib/permissions/permissions'
+import { UpgradeModal } from '@/components/upgrade/upgrade-modal'
 
 export const metadata = {
   title: 'Upgrade to JobSite Snap | SnapLabs Global',

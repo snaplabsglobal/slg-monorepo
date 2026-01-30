@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { Button } from '@slo/snap-auth/components/client'
-import { createUpgradeRequest } from '@/app/lib/permissions/permissions'
+import { createUpgradeRequest } from '@/lib/permissions/permissions'
 
 interface UpgradeModalProps {
   user: User

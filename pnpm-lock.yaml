@@ -33,12 +33,15 @@ importers:
 
   apps/jss-web:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.975.0
+        version: 3.975.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.975.0
+        version: 3.975.0
       '@slo/snap-auth':
         specifier: workspace:^
         version: link:../../packages/snap-auth
-      '@slo/snap-storage':
-        specifier: workspace:^
-        version: link:../../packages/snap-storage
       '@supabase/ssr':
         specifier: ^0.8.0
         version: 0.8.0(@supabase/supabase-js@2.93.0)
