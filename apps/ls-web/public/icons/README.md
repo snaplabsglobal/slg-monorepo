@@ -1,6 +1,8 @@
 # PWA Icons
 
-- **icon-192.png** / **icon-512.png** — manifest icons (192×192, 512×512).
-- **apple-touch-icon.png** — **180×180**（iOS 要求），背景 `#0b1220`。
-  - 当前为纯色 #0b1220，由 `pnpm run gen:apple-touch-icon` 生成。
-  - 可选：替换为带「LS」白色/浅灰字样的正式图标，效果更佳。
+- **icon-192.png** (192×192) — PWA manifest + 网页 favicon
+- **icon-512.png** (512×512) — PWA 安装/启动大图
+- **apple-touch-icon.png** (180×180) — iOS 主屏/书签
+
+均由 `pnpm run gen:apple-touch-icon` 生成（纯色 #0b1220）。  
+替换 logo：直接覆盖上述 PNG 或改脚本用 ls-logo.svg 合成。

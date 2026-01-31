@@ -12,6 +12,10 @@ const nextConfig = {
     // Prevent CDN/browser from caching dynamic pages (dev.ledgersnap.app updates)
     // PWA + CSP (CTO#1): security headers for all routes
     async headers() {
+        const isDev = process.env.NODE_ENV === 'development'
+        const connectSrc = isDev
+            ? "'self' https://*.supabase.co wss://*.supabase.co http://127.0.0.1:54321 ws://127.0.0.1:54321"
+            : "'self' https://*.supabase.co wss://*.supabase.co"
         const securityHeaders = [
             {
                 key: 'Content-Security-Policy',
@@ -21,7 +25,7 @@ const nextConfig = {
                     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                     "img-src 'self' data: blob: https:",
                     "font-src 'self' https://fonts.gstatic.com",
-                    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+                    `connect-src ${connectSrc}`,
                     "frame-ancestors 'none'",
                     "base-uri 'self'",
                     "object-src 'none'",

@@ -8,13 +8,16 @@ import { PwaRegister } from '@/app/components/global/PwaRegister';
 export const metadata: Metadata = {
   title: 'LedgerSnap - 快速拍照识别',
   description: 'Mobile-first receipt management',
-  themeColor: '#0b1220',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     title: 'LedgerSnap',
     statusBarStyle: 'black-translucent',
   },
+};
+
+export const viewport = {
+  themeColor: '#0b1220',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
