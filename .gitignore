@@ -15,8 +15,9 @@ dist/
 # Turbo
 .turbo/
 
-# Local receipts / test images
+# Local receipts / test images (not app/lib/receipts source)
 receipts/
+!**/app/lib/receipts/
 
 # Misc
 .DS_Store
