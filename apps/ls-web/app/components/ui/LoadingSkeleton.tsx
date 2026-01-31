@@ -27,3 +27,28 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
     </div>
   );
 }
+
+/** Gray pulsing placeholder for status badge while receipt data is loading */
+export function StatusBadgeSkeleton() {
+  return (
+    <div className="inline-flex items-center gap-2" aria-hidden>
+      <span className="inline-flex h-6 w-24 rounded-full bg-gray-200 animate-pulse" />
+    </div>
+  )
+}
+
+/** Receipt detail skeleton: stable screen while data loads, prevents unmount flicker */
+export function ReceiptDetailSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4 p-4">
+      <div className="h-48 bg-gray-200 rounded-xl" />
+      <div className="h-6 bg-gray-200 rounded w-2/3" />
+      <div className="grid gap-3">
+        <div className="h-12 bg-gray-200 rounded-lg" />
+        <div className="h-12 bg-gray-200 rounded-lg" />
+        <div className="h-24 bg-gray-200 rounded-xl" />
+        <div className="h-12 bg-gray-200 rounded-lg" />
+      </div>
+    </div>
+  );
+}

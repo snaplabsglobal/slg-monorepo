@@ -12,10 +12,8 @@ const nextConfig = {
     // Prevent CDN/browser from caching dynamic pages (dev.ledgersnap.app updates)
     // PWA + CSP (CTO#1): security headers for all routes
     async headers() {
-        const isDev = process.env.NODE_ENV === 'development'
-        const connectSrc = isDev
-            ? "'self' https://*.supabase.co wss://*.supabase.co http://127.0.0.1:54321 ws://127.0.0.1:54321"
-            : "'self' https://*.supabase.co wss://*.supabase.co"
+        // Allow same-origin, Supabase, local dev; https: wss: so 30s polling / fetch never blocked by CSP (no TypeError flicker)
+        const connectSrc = "'self' https: wss: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:54321 ws://127.0.0.1:54321"
         const securityHeaders = [
             {
                 key: 'Content-Security-Policy',

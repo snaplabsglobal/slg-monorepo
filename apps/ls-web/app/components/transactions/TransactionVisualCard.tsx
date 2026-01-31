@@ -6,7 +6,8 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import type { Transaction } from './TransactionList'
-import { deriveAsyncStatus } from './status'
+import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 import { formatDateOnly } from '@/app/lib/utils/format'
 
 export interface TransactionVisualCardProps {
@@ -37,20 +38,14 @@ function formatAmount(amount: number, currency: string = 'CAD'): string {
   }).format(amount)
 }
 
-/** 状态小圆点：绿=已就绪，黄=待审核，蓝=解析中，红=需关注（不遮挡缩略图） */
-function StatusDot({ status }: { status: ReturnType<typeof deriveAsyncStatus> }) {
-  const dotClass =
-    status === 'approved'
-      ? 'bg-green-500'
-      : status === 'needs_review' || status === 'warning'
-        ? 'bg-amber-500'
-        : status === 'pending'
-          ? 'bg-blue-500'
-          : 'bg-red-500'
+/** 状态小圆点：绿=已就绪，黄=待确认，灰=解析中，红=失败（不遮挡缩略图） */
+function StatusDot({ status }: { status: ReturnType<typeof getReceiptStatus> }) {
+  const ui = getReceiptStatusUI(status)
   return (
     <span
-      className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm ${dotClass}`}
-      title={status === 'approved' ? '数据已就绪' : status === 'needs_review' || status === 'warning' ? '待审核' : status === 'pending' ? '解析中' : '需关注'}
+      className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm"
+      style={{ backgroundColor: ui.color }}
+      title={ui.label}
       aria-hidden
     />
   )
@@ -58,7 +53,7 @@ function StatusDot({ status }: { status: ReturnType<typeof deriveAsyncStatus> })
 
 export function TransactionVisualCard({ transaction, onClick, priority }: TransactionVisualCardProps) {
   const [imageError, setImageError] = useState(false)
-  const asyncStatus = deriveAsyncStatus(transaction as any)
+  const receiptStatus = getReceiptStatus(toReceiptLike(transaction as any))
 
   // Get tax details (for grey footnote, not green box)
   const taxDetails = (transaction as any).tax_details || {}
@@ -100,7 +95,7 @@ export function TransactionVisualCard({ transaction, onClick, priority }: Transa
               <span className="text-4xl">📄</span>
             </div>
           )}
-          <StatusDot status={asyncStatus} />
+          <StatusDot status={receiptStatus} />
         </div>
 
         {/* 右侧：Vendor（加粗）→ Date（灰）→ Total（大字）→ GST 灰色小字；hover 显示可抵扣 */}

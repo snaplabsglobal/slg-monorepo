@@ -19,6 +19,7 @@ import {
 import { UploadQueueIndicator } from '@/app/components/receipts/UploadQueueIndicator';
 import { InstallPrompt } from '@/app/components/pwa/InstallPrompt';
 import { useOffline } from '@/app/hooks/useOffline';
+import { useHasMounted } from '@/app/hooks/useHasMounted';
 
 // Recycle Bin Icon
 const RecycleBinIcon = () => (
@@ -37,6 +38,7 @@ export function DashboardLayout({ children, userEmail, userName }: DashboardLayo
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const hasMounted = useHasMounted();
   const isOffline = useOffline();
 
   const navigation = [
@@ -62,8 +64,8 @@ export function DashboardLayout({ children, userEmail, userName }: DashboardLayo
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* CTO#1: Offline banner inside dashboard */}
-      {isOffline && (
+      {/* CTO#1: Offline banner — only after mount to avoid hydration mismatch with useOffline() */}
+      {hasMounted && isOffline && (
         <div className="bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-2 text-sm text-center">
           目前处于离线模式，功能受限，数据将在恢复网络后同步
         </div>

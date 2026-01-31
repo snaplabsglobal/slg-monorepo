@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useHasMounted } from '@/app/hooks/useHasMounted'
 
 function isStandalone() {
   const mql = window.matchMedia?.('(display-mode: standalone)')?.matches
@@ -15,6 +16,7 @@ function isIOS() {
 const DISMISS_KEY = 'ls_install_dismissed_until'
 
 export function InstallPrompt() {
+  const hasMounted = useHasMounted()
   const [deferredPrompt, setDeferredPrompt] = useState<{ prompt: () => Promise<{ outcome: string }> } | null>(null)
   const [show, setShow] = useState(false)
 
@@ -25,7 +27,6 @@ export function InstallPrompt() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-
     if (standalone) return
 
     const dismissedUntil = Number(localStorage.getItem(DISMISS_KEY) || '0')
@@ -38,15 +39,11 @@ export function InstallPrompt() {
     }
 
     window.addEventListener('beforeinstallprompt', handler)
-
-    if (isIOS()) {
-      setShow(true)
-    }
-
+    if (isIOS()) setShow(true)
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [standalone])
 
-  if (!show || standalone) return null
+  if (!hasMounted || !show || standalone) return null
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000))

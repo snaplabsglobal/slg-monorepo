@@ -10,7 +10,8 @@ import { useRealtimeTransactions } from '@/app/hooks/useRealtimeTransactions'
 import { useHasMounted } from '@/app/hooks/useHasMounted'
 import { ViewToggle, type ViewMode } from './ViewToggle'
 import { FiltersBar, type Filters } from './FiltersBar'
-import { deriveAsyncStatus } from './status'
+import { getReceiptStatus } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 
 const OFFLINE_TOAST_MSG = '离线模式：无法刷新，将显示本地缓存'
 const OFFLINE_TOAST_DURATION_MS = 4000
@@ -110,10 +111,10 @@ export function TransactionList({
   const statusFilter = filters.statusFilter ?? 'all'
   if (statusFilter !== 'all') {
     transactions = transactions.filter((t) => {
-      const status = deriveAsyncStatus(t as any)
-      if (statusFilter === 'pending') return status === 'pending' || status === 'needs_review'
-      if (statusFilter === 'approved') return status === 'approved'
-      if (statusFilter === 'needs_attention') return status === 'error' || status === 'warning'
+      const status = getReceiptStatus(toReceiptLike(t as any))
+      if (statusFilter === 'pending') return status === 'PROCESSING' || status === 'NEEDS_CONFIRM'
+      if (statusFilter === 'approved') return status === 'READY'
+      if (statusFilter === 'needs_attention') return status === 'FAILED'
       return true
     })
   }
@@ -121,8 +122,8 @@ export function TransactionList({
   // Apply quick "需要审核" filter (TABLE_VIEW_FIX: filter buttons work)
   if (filters.quick === 'needs-review') {
     transactions = transactions.filter((t) => {
-      const s = deriveAsyncStatus(t as any)
-      return s === 'pending' || s === 'needs_review'
+      const s = getReceiptStatus(toReceiptLike(t as any))
+      return s === 'PROCESSING' || s === 'NEEDS_CONFIRM'
     })
   }
 

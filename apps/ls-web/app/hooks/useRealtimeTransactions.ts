@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { deriveAsyncStatus } from '@/app/components/transactions/status'
+import { getReceiptStatus } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 import { useOffline } from '@/app/hooks/useOffline'
 import { putTransaction, toTransactionSummary } from '@/app/lib/offline-cache/transactions'
 
@@ -15,6 +16,7 @@ type Transaction = {
   currency: string
   direction: 'income' | 'expense'
   status: string
+  is_verified?: boolean | null
   needs_review?: boolean | null
   ai_confidence?: number | null
   raw_data?: any
@@ -39,6 +41,10 @@ export function useRealtimeTransactions(
   const channelRef = useRef<any>(null)
   const isCleaningUpRef = useRef(false)
   const hadChannelErrorRef = useRef(false)
+  const initialLoadDoneRef = useRef(false)
+  /** Keep latest list for silent refresh: only update state when data actually changed (by updated_at) */
+  const transactionsRef = useRef<Transaction[]>([])
+  transactionsRef.current = transactions
 
   // Create Supabase client once (memoized) - stable reference to prevent re-subscription
   const supabase = useMemo(
@@ -72,12 +78,15 @@ export function useRealtimeTransactions(
     mountedRef.current = true
     isCleaningUpRef.current = false
     hadChannelErrorRef.current = false
+    initialLoadDoneRef.current = false
 
     const loadTransactions = async () => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         onOfflineRefetch?.()
         return
       }
+      const isInitial = !initialLoadDoneRef.current
+      if (isInitial && mountedRef.current) setIsLoading(true)
       try {
         const query = supabase
           .from('transactions')
@@ -91,7 +100,10 @@ export function useRealtimeTransactions(
 
         if (error) {
           console.error('[RealtimeTransactions] Load error:', error)
-          if (mountedRef.current) setIsLoading(false)
+          if (mountedRef.current && isInitial) {
+            initialLoadDoneRef.current = true
+            setIsLoading(false)
+          }
           return
         }
 
@@ -101,12 +113,24 @@ export function useRealtimeTransactions(
             if (!tx.deleted_at) transactionMap.set(tx.id, tx)
           })
           const uniqueTransactions = Array.from(transactionMap.values())
-          setTransactions(uniqueTransactions)
-          const pending = uniqueTransactions.filter((t: Transaction) => deriveAsyncStatus(t) === 'pending').length
-          setPendingCount(pending)
+          const prev = transactionsRef.current
+          /** Only trigger re-render when data actually changed (compare id + updated_at) */
+          const same =
+            prev.length === uniqueTransactions.length &&
+            uniqueTransactions.every((t) => {
+              const p = prev.find((x) => x.id === t.id)
+              return p && (p as any).updated_at === (t as any).updated_at
+            })
+          if (!same) {
+            setTransactions(uniqueTransactions)
+            const pending = uniqueTransactions.filter(
+              (t: Transaction) => getReceiptStatus(toReceiptLike(t as any)) === 'PROCESSING'
+            ).length
+            setPendingCount(pending)
+          }
+          initialLoadDoneRef.current = true
           setIsLoading(false)
 
-          // Non-blocking: cache summaries for offline detail (list seen once = detail openable offline)
           if (uniqueTransactions.length > 0) {
             void (async () => {
               try {
@@ -117,14 +141,17 @@ export function useRealtimeTransactions(
                   if (summary?.id) await putTransaction(summary)
                 }
               } catch {
-                // Ignore cache errors; do not block UI
+                // Ignore cache errors
               }
             })()
           }
         }
       } catch (err) {
         console.error('[RealtimeTransactions] Load error:', err)
-        if (mountedRef.current) setIsLoading(false)
+        if (mountedRef.current && isInitial) {
+          initialLoadDoneRef.current = true
+          setIsLoading(false)
+        }
       }
     }
 
@@ -133,20 +160,31 @@ export function useRealtimeTransactions(
     const handleTransactionAnalyzed = () => {
       void loadTransactions()
     }
+    const handleTransactionVerified = (e: Event) => {
+      const id = (e as CustomEvent<{ transactionId?: string }>)?.detail?.transactionId
+      if (id && mountedRef.current) {
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, is_verified: true } : t))
+        )
+      }
+      if (typeof navigator !== 'undefined' && navigator.onLine) void loadTransactions()
+    }
     window.addEventListener('transaction-analyzed', handleTransactionAnalyzed)
+    window.addEventListener('transaction-verified', handleTransactionVerified)
 
     // Only run 5s polling when online; offline branch above returns early so no interval
     const refreshInterval = setInterval(() => {
       if (mountedRef.current && organizationId && typeof navigator !== 'undefined' && navigator.onLine) {
         void loadTransactions()
       }
-    }, 5000)
+    }, 30000)
 
     // CRITICAL: Check if channel already exists to prevent duplicate subscriptions
     if (channelRef.current) {
       return () => {
         clearInterval(refreshInterval)
         window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
+        window.removeEventListener('transaction-verified', handleTransactionVerified)
       }
     }
 
@@ -175,7 +213,7 @@ export function useRealtimeTransactions(
             // Data lock: critical fields only when existing tx is already "Ready" (approved)
             // to avoid flicker from minor Realtime updates (e.g. ai_confidence, raw_data)
             const CRITICAL_KEYS = [
-              'deleted_at', 'voided_at', 'status', 'needs_review', 'vendor_name',
+              'deleted_at', 'voided_at', 'status', 'needs_review', 'is_verified', 'vendor_name',
               'total_amount', 'transaction_date', 'tax_details', 'updated_at',
               'category_user', 'attachment_url', 'is_suspected_duplicate',
             ] as const
@@ -222,7 +260,9 @@ export function useRealtimeTransactions(
               const updated = Array.from(transactionMap.values())
               
               // Update pending count based on updated transactions
-              const pending = updated.filter((t: Transaction) => deriveAsyncStatus(t) === 'pending').length
+              const pending = updated.filter(
+                (t: Transaction) => getReceiptStatus(toReceiptLike(t as any)) === 'PROCESSING'
+              ).length
               setPendingCount(pending)
               return updated
             })
@@ -244,7 +284,7 @@ export function useRealtimeTransactions(
         } else if (status === 'CLOSED') {
           // Skip redundant warn when close is due to a prior error, or during our own cleanup
           if (!isCleaningUpRef.current && !hadChannelErrorRef.current) {
-            console.warn('[RealtimeTransactions] ⚠️ Channel closed')
+            console.debug('[RealtimeTransactions] Channel closed')
           }
           // CRITICAL: DO NOT trigger reconnection here - it causes loops
           // Supabase will handle reconnection automatically, or useEffect will re-run if orgId changes
@@ -259,6 +299,7 @@ export function useRealtimeTransactions(
       isCleaningUpRef.current = true
       clearInterval(refreshInterval)
       window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
+      window.removeEventListener('transaction-verified', handleTransactionVerified)
       mountedRef.current = false
       if (channelRef.current) {
         const ch = channelRef.current

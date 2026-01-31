@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { StatusBadge } from './StatusBadge'
+import { StatusBadgeSkeleton } from '@/app/components/ui/LoadingSkeleton'
 import { DeletedInfoBanner } from './DeletedInfoBanner'
 import {
   isSuspiciousDate,
@@ -17,6 +18,7 @@ export interface TransactionDetail {
   total_amount: number
   currency: string
   status: string
+  is_verified?: boolean | null
   needs_review?: boolean | null
   deleted_at?: string | null
   deletion_reason?: string | null
@@ -33,7 +35,8 @@ export interface TransactionDetail {
 interface TransactionDataFormProps {
   transaction: TransactionDetail
   onSave: (updates: Partial<TransactionDetail>) => Promise<void>
-  onConfirm: () => Promise<void>
+  /** Legacy; confirm flow is now single ConfirmDataButton in parent (確認數據) */
+  onConfirm?: () => Promise<void>
   saving?: boolean
   /** Recycle bin: all fields read-only, no Edit/Confirm */
   readOnly?: boolean
@@ -41,6 +44,8 @@ interface TransactionDataFormProps {
   compactForMobile?: boolean
   /** Mobile: when user taps Edit, parent can expand sheet to full height */
   onStartEdit?: () => void
+  /** When true, show a skeleton instead of StatusBadge (data still loading); avoids status flicker */
+  showStatusSkeleton?: boolean
 }
 
 export interface TransactionDataFormHandle {
@@ -49,7 +54,7 @@ export interface TransactionDataFormHandle {
 }
 
 function TransactionDataFormInner(
-  { transaction, onSave, onConfirm, saving, readOnly = false, compactForMobile = false, onStartEdit }: TransactionDataFormProps,
+  { transaction, onSave, onConfirm, saving, readOnly = false, compactForMobile = false, onStartEdit, showStatusSkeleton = false }: TransactionDataFormProps,
   ref: React.Ref<TransactionDataFormHandle>
 ) {
   const [editing, setEditing] = useState(false)
@@ -174,7 +179,11 @@ function TransactionDataFormInner(
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge transaction={transaction as any} />
+          {showStatusSkeleton || !transaction ? (
+            <StatusBadgeSkeleton />
+          ) : (
+            <StatusBadge transaction={transaction as any} />
+          )}
         </div>
         {!readOnly && !editing ? (
           <button
@@ -242,53 +251,53 @@ function TransactionDataFormInner(
         </div>
       )}
 
-      {/* Full form: mobile shows all fields read-only by default; Edit unlocks inputs (UI parity with desktop) */}
+      {/* Full form: 卡片化設計，財稅綠 #10b981 高亮 Total/Tax */}
       <div className="space-y-4 flex-1 overflow-auto pr-1">
-        <div className="grid grid-cols-1 gap-3">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <label className="text-xs font-medium text-gray-600">Vendor</label>
           <input
             value={vendorName}
             onChange={(e) => setVendorName(e.target.value)}
             disabled={readOnly || !editing || !!saving}
-            className="px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-600"
+            className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-600"
             placeholder="Vendor name"
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <label className="text-xs font-medium text-gray-600">Date</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             disabled={readOnly || !editing || !!saving}
-            className={`px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:text-gray-600 ${
+            className={`mt-1 w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:text-gray-600 ${
               suspiciousDate
                 ? 'border-amber-400 bg-amber-50 focus:ring-amber-200'
                 : 'border-gray-200 focus:ring-blue-100'
             }`}
           />
           {suspiciousDate && (
-            <p className="text-xs text-amber-700">
+            <p className="mt-1 text-xs text-amber-700">
               ⚠️ 年份可疑（距今 {yearsFromNow(date)} 年），请确认
             </p>
           )}
           {typeof confidence === 'number' && (
-            <p className="text-xs text-gray-500">AI 置信度: {Math.round(confidence * 100)}%</p>
+            <p className="mt-1 text-xs text-gray-500">AI 置信度: {Math.round(confidence * 100)}%</p>
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-gray-700 mb-2">Canada tax breakdown</p>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">GST (5%)</span>
-            <span className={isRefund && tax.gst > 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-green-700'}>
+            <span className="font-semibold" style={{ color: '#10b981' }}>
               {isRefund && tax.gst > 0 ? '−' : ''}${Math.abs(tax.gst).toFixed(2)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm mt-1">
             <span className="text-gray-600">PST (7%)</span>
-            <span className={isRefund && tax.pst > 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-gray-700'}>
+            <span className="font-semibold" style={{ color: '#10b981' }}>
               {isRefund && tax.pst > 0 ? '−' : ''}${Math.abs(tax.pst).toFixed(2)}
             </span>
           </div>
@@ -304,7 +313,7 @@ function TransactionDataFormInner(
                   className="w-28 text-right px-2 py-1 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 />
               ) : (
-                <span className={`text-lg font-bold ${tax.displayTotal < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
+                <span className="text-lg font-bold" style={{ color: tax.displayTotal < 0 ? '#059669' : '#10b981' }}>
                   {tax.displayTotal < 0 ? '−' : ''}${Math.abs(tax.displayTotal).toFixed(2)} {transaction.currency || 'CAD'}
                 </span>
               )}
@@ -312,13 +321,13 @@ function TransactionDataFormInner(
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <label className="text-xs font-medium text-gray-600">Category</label>
           <input
             value={categoryUser}
             onChange={(e) => setCategoryUser(e.target.value)}
             disabled={readOnly || !editing || !!saving}
-            className="px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-600"
+            className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-600"
             placeholder="Category (user)"
           />
         </div>
@@ -376,21 +385,6 @@ function TransactionDataFormInner(
         </div>
       )}
 
-      {!readOnly && !compactForMobile && (
-        <div className="pt-4 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={!!saving || transaction.status === 'exported' || transaction.status === 'locked' || !!transaction.deleted_at}
-            className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-60"
-          >
-            ✓ Confirm & move on
-          </button>
-          <p className="text-xs text-gray-500 mt-2">
-            Confirm will set status to approved and close this panel.
-          </p>
-        </div>
-      )}
     </div>
   )
 }

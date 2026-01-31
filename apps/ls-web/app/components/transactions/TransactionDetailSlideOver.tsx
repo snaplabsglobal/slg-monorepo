@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ReceiptImagePanel } from './ReceiptImagePanel'
 import { TransactionDataForm, type TransactionDetail } from './TransactionDataForm'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
 import { fetchWithOffline } from '@/app/lib/utils/fetchWithOffline'
 import { getTransaction, putTransaction } from '@/app/lib/offline-cache/transactions'
 import { useOffline } from '@/app/hooks/useOffline'
+import { ReceiptDetailSkeleton } from '@/app/components/ui/LoadingSkeleton'
+import { getReceiptStatus } from '@slo/shared-utils'
+import { useSubscribeTransaction } from '@/app/hooks/useSubscribeTransaction'
+import { ConfirmDataButton } from './ConfirmDataButton'
 
 interface TransactionDetailSlideOverProps {
   transactionId: string | null
@@ -28,10 +32,18 @@ export function TransactionDetailSlideOver({
   const [error, setError] = useState<string | null>(null)
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
   const isOffline = useOffline()
+  /** Keep current detail so we never set loading during refetch (keep old data on screen) */
+  const detailRef = useRef<{ id: string; data: TransactionDetail } | null>(null)
+  if (transaction) detailRef.current = { id: transaction.id, data: transaction }
+  else if (!transactionId) detailRef.current = null
 
   const open = !!transactionId
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
   const isOfflineCachedOnly = isOffline && !!transaction
+  const receiptStatus = getReceiptStatus(transaction ?? undefined)
+
+  // Realtime: 一端 Confirm 写 Supabase 后，此端立刻变色
+  useSubscribeTransaction(transactionId, (row) => setTransaction(row as unknown as TransactionDetail))
 
   useEffect(() => {
     if (!open) return
@@ -54,7 +66,6 @@ export function TransactionDetailSlideOver({
     let cancelled = false
     async function run() {
       try {
-        setLoading(true)
         setError(null)
         const url = includeDeleted
           ? `/api/transactions/${id}?includeDeleted=true`
@@ -64,6 +75,8 @@ export function TransactionDetailSlideOver({
         if (!cancelled && cached) {
           setTransaction(cached as unknown as TransactionDetail)
         }
+        const hasDataForThisId = detailRef.current?.id === id && detailRef.current?.data
+        if (!cancelled && !cached && !hasDataForThisId) setLoading(true)
 
         const res = await fetchWithOffline(url)
         if ('offline' in res) {
@@ -91,7 +104,9 @@ export function TransactionDetailSlideOver({
             return
           }
           const tx = json.transaction
-          setTransaction(tx)
+          const prev = detailRef.current?.id === id ? detailRef.current?.data : null
+          const unchanged = prev && (prev as any).updated_at === (tx as any)?.updated_at
+          if (!unchanged) setTransaction(tx)
           if (tx?.id) void putTransaction(tx).catch(() => {})
         }
       } catch (e: unknown) {
@@ -221,8 +236,20 @@ export function TransactionDetailSlideOver({
       {/* panel */}
       <div className="absolute inset-y-0 right-0 w-full max-w-5xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
         <div className="h-14 px-6 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900 truncate">{title}</h2>
+          <h2 className="font-semibold truncate" style={{ color: '#0b1220' }}>{title}</h2>
           <div className="flex items-center gap-2">
+            {transaction && receiptStatus === 'READY' && !isRecycleBin && (
+              <button
+                type="button"
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                aria-label="编辑"
+                title="编辑"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            )}
             {/* Recycle Bin: only Permanent Delete + Close */}
             {isRecycleBin ? (
               <>
@@ -311,10 +338,18 @@ export function TransactionDetailSlideOver({
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          {loading ? (
-            <div className="h-full flex items-center justify-center text-sm text-gray-500">Loading…</div>
-          ) : error ? (
+        <div className="flex-1 overflow-hidden relative">
+          {loading && !transaction && (
+            <div className="h-full overflow-auto">
+              <ReceiptDetailSkeleton />
+            </div>
+          )}
+          {loading && transaction && (
+            <div className="absolute top-2 left-4 right-4 rounded-lg bg-gray-100/90 text-gray-600 text-xs py-1.5 text-center z-10">
+              刷新中…
+            </div>
+          )}
+          {error && !transaction ? (
             <div
               className={
                 error.startsWith('离线模式：')
@@ -345,15 +380,22 @@ export function TransactionDetailSlideOver({
                     transaction={transaction}
                     saving={saving}
                     readOnly={isRecycleBin}
+                    showStatusSkeleton={loading}
                     onSave={async (updates) => {
                       await patch(updates)
                     }}
-                    onConfirm={async () => {
-                      const updated = await patch({ status: 'approved', needs_review: false })
-                      onClose()
-                      onConfirmed?.(updated || null)
-                    }}
                   />
+                  {receiptStatus === 'NEEDS_CONFIRM' && !isRecycleBin && (
+                    <div className="receipt-detail__footer shrink-0 mt-4 pt-4 border-t border-gray-100">
+                      <ConfirmDataButton
+                        transactionId={String(transaction.id)}
+                        onDone={() => {
+                          onClose()
+                          onConfirmed?.(undefined)
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
 // components/transactions/MobileBottomSheet.tsx
-// 移动端底部抽屉：两段式拉伸 (60% 快速浏览 / 95% 全屏编辑)
+// 移动端收据详情：全屏模态，财稅綠主按钮，Deep Navy 标题
 
 'use client'
 
@@ -10,9 +10,13 @@ import { PermanentDeleteDialog } from './PermanentDeleteDialog'
 import { fetchWithOffline } from '@/app/lib/utils/fetchWithOffline'
 import { getTransaction, putTransaction } from '@/app/lib/offline-cache/transactions'
 import { useOffline } from '@/app/hooks/useOffline'
+import { ReceiptDetailSkeleton } from '@/app/components/ui/LoadingSkeleton'
+import { getReceiptStatus } from '@slo/shared-utils'
+import { useSubscribeTransaction } from '@/app/hooks/useSubscribeTransaction'
+import { ConfirmDataButton } from './ConfirmDataButton'
 
-const SNAP_QUICK = '60%'   // 默认：缩略图 + 核心数据
-const SNAP_FULL = '95vh'   // 全屏：编辑 / 地址等详情
+const DEEP_NAVY = '#0b1220'
+const FINANCIAL_GREEN = '#10b981'
 
 // X icon SVG
 const XIcon = () => (
@@ -39,23 +43,28 @@ export function MobileBottomSheet({
   const [loading, setLoading] = useState(false)
   const [transaction, setTransaction] = useState<TransactionDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [sheetHeight, setSheetHeight] = useState(SNAP_QUICK)
   const [fullscreenImage, setFullscreenImage] = useState(false)
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false)
   const [addressExpanded, setAddressExpanded] = useState(false)
   const formRef = useRef<TransactionDataFormHandle>(null)
   const isOffline = useOffline()
+  /** Keep current detail so we never set loading during refetch (keep old data on screen) */
+  const detailRef = useRef<{ id: string; data: TransactionDetail } | null>(null)
+  if (transaction) detailRef.current = { id: transaction.id, data: transaction }
+  else if (!transactionId || !isOpen) detailRef.current = null
 
   const isRecycleBin = includeDeleted && !!transaction?.deleted_at
   const isOfflineCachedOnly = isOffline && !!transaction
-  const isFullHeight = sheetHeight === SNAP_FULL
+  const receiptStatus = getReceiptStatus(transaction ?? undefined)
 
-  /** 点开时默认 60%；切换交易时重置 */
+  // Realtime: 一端 Confirm 写 Supabase 后，此端立刻变色
+  useSubscribeTransaction(
+    transactionId && isOpen ? transactionId : null,
+    (row) => setTransaction(row as unknown as TransactionDetail)
+  )
+
   useEffect(() => {
-    if (transactionId != null && isOpen) {
-      setSheetHeight(SNAP_QUICK)
-      setAddressExpanded(false)
-    }
+    if (transactionId != null && isOpen) setAddressExpanded(false)
   }, [transactionId, isOpen])
 
   useEffect(() => {
@@ -69,7 +78,6 @@ export function MobileBottomSheet({
     let cancelled = false
     async function run() {
       try {
-        setLoading(true)
         setError(null)
         const url = includeDeleted
           ? `/api/transactions/${id}?includeDeleted=true`
@@ -79,6 +87,8 @@ export function MobileBottomSheet({
         if (!cancelled && cached) {
           setTransaction(cached as unknown as TransactionDetail)
         }
+        const hasDataForThisId = detailRef.current?.id === id && detailRef.current?.data
+        if (!cancelled && !cached && !hasDataForThisId) setLoading(true)
 
         const res = await fetchWithOffline(url)
         if ('offline' in res) {
@@ -106,7 +116,9 @@ export function MobileBottomSheet({
             return
           }
           const tx = json.transaction
-          setTransaction(tx)
+          const prev = detailRef.current?.id === id ? detailRef.current?.data : null
+          const unchanged = prev && (prev as any).updated_at === (tx as any)?.updated_at
+          if (!unchanged) setTransaction(tx)
           if (tx?.id) void putTransaction(tx).catch(() => {})
         }
       } catch (e: unknown) {
@@ -123,33 +135,6 @@ export function MobileBottomSheet({
       cancelled = true
     }
   }, [transactionId, isOpen, onClose, includeDeleted])
-
-  const handleConfirm = async () => {
-    if (!transaction) return
-    if (isRecycleBin) return // Restore is handled by footer button
-
-    // Update status to approved if pending/needs_review
-    if (transaction.status === 'pending' || transaction.status === 'needs_review' || transaction.needs_review) {
-      try {
-        const res = await fetch(`/api/transactions/${transaction.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'approved', needs_review: false }),
-        })
-        const json = await res.json()
-        if (res.ok) {
-          setTransaction(json.transaction)
-          onConfirmed?.(json.transaction)
-        }
-      } catch (e) {
-        console.error('Failed to confirm transaction:', e)
-      }
-    } else {
-      onConfirmed?.(transaction)
-    }
-
-    setTimeout(() => onClose(), 300)
-  }
 
   const handleSave = async (updates: Partial<TransactionDetail>) => {
     if (!transaction?.id) return
@@ -187,10 +172,6 @@ export function MobileBottomSheet({
 
   if (!isOpen) return null
 
-  const toggleSnap = () => {
-    setSheetHeight((h) => (h === SNAP_FULL ? SNAP_QUICK : SNAP_FULL))
-  }
-  const handleRequestExpand = () => setSheetHeight(SNAP_FULL)
   const rawData = transaction?.raw_data as Record<string, unknown> | undefined
   const vendorAddress =
     typeof rawData?.vendor_address === 'string'
@@ -215,44 +196,50 @@ export function MobileBottomSheet({
         onClick={onClose}
       />
       
-      {/* Bottom Sheet — 两段式 60% / 95% */}
+      {/* Full-screen modal — 100% height immediately */}
       <div
         className={`
-          fixed bottom-0 left-0 right-0 z-50
-          bg-white rounded-t-3xl
-          transform transition-transform duration-300 ease-out
+          fixed inset-0 z-50
+          bg-white
           flex flex-col
+          transform transition-transform duration-300 ease-out
           ${isOpen ? 'translate-y-0' : 'translate-y-full'}
         `}
-        style={{ height: sheetHeight, maxHeight: '100vh' }}
       >
-        {/* 顶部拖拽条：点击切换高度 */}
-        <div className="flex-shrink-0 bg-white rounded-t-3xl z-10 pb-2">
-          <button
-            type="button"
-            onClick={toggleSnap}
-            className="w-full pt-3 pb-2 flex flex-col items-center gap-1 cursor-grab active:cursor-grabbing"
-            aria-label={isFullHeight ? '收起' : '上滑展开'}
-          >
-            <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
-            <span className="text-xs text-gray-400">{isFullHeight ? '下滑收起' : '上滑展开'}</span>
-          </button>
-          <div className="flex items-center justify-between px-6 pb-2">
-            <h2 className="text-lg font-bold text-gray-900">收据详情</h2>
+        {/* Header: Deep Navy title; READY → Edit icon (placeholder) */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="text-lg font-bold truncate pr-2" style={{ color: DEEP_NAVY }}>
+            {transaction?.vendor_name || '收据详情'}
+          </h2>
+          <div className="flex items-center gap-1">
+            {transaction && receiptStatus === 'READY' && (
+              <button
+                type="button"
+                className="p-2 hover:bg-gray-100 rounded-full text-gray-600"
+                aria-label="编辑"
+                title="编辑"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-full"
+              aria-label="关闭"
             >
               <XIcon />
             </button>
           </div>
         </div>
-        
-        {/* 可滚动内容；pb-28 避免被底部按钮遮挡 */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-28">
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-gray-500">加载中...</div>
+
+        {/* Scrollable content — primary button at end of form, no fixed bottom */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-8 relative">
+          {loading && !transaction && <ReceiptDetailSkeleton />}
+          {loading && transaction && (
+            <div className="absolute top-2 left-6 right-6 rounded-lg bg-gray-100/90 text-gray-600 text-xs py-1.5 text-center">
+              刷新中…
             </div>
           )}
 
@@ -306,8 +293,8 @@ export function MobileBottomSheet({
 
               {/* 供应商地址（CRA 合规）：智能折叠 */}
               {(vendorAddress || gstNumber) && (
-                <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-xs font-medium text-gray-500 mb-1">供应商信息（备审计）</p>
+                <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <p className="text-xs font-semibold mb-1" style={{ color: DEEP_NAVY }}>供应商信息（备审计）</p>
                   {vendorAddress && (
                     <button
                       type="button"
@@ -332,48 +319,41 @@ export function MobileBottomSheet({
                 ref={formRef}
                 transaction={transaction}
                 onSave={handleSave}
-                onConfirm={handleConfirm}
                 saving={loading}
                 compactForMobile
-                onStartEdit={handleRequestExpand}
+                showStatusSkeleton={loading}
               />
+
+              {/* Primary actions: Recycle Bin only; confirm 確認數據 is in receipt-detail__footer */}
+              <div className="mt-6 pt-4 border-t border-gray-100 space-y-3">
+                {isRecycleBin && (
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="flex-1 px-4 py-3.5 border border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      ← 返回回收站
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRestore}
+                      className="flex-1 px-4 py-3.5 text-white rounded-xl font-bold transition-colors hover:opacity-95"
+                      style={{ backgroundColor: FINANCIAL_GREEN }}
+                    >
+                      🔄 还原收据
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
-        
-        {/* 底部固定按钮；有待处理项时显示红色角标 */}
-        {transaction && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-10">
-            {isRecycleBin ? (
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50"
-                >
-                  ← 返回回收站
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRestore}
-                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700"
-                >
-                  🔄 还原收据
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleConfirm}
-                className="relative w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg transition-colors"
-              >
-                确认
-                {(transaction.needs_review || transaction.status === 'error' || (transaction as any).is_suspected_duplicate) && (
-                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white ring-2 ring-white">
-                    1
-                  </span>
-                )}
-              </button>
-            )}
+
+        {/* receipt-detail__footer: 唯一底部容器，僅「確認數據」按鈕 #10b981 */}
+        {transaction && receiptStatus === 'NEEDS_CONFIRM' && !isRecycleBin && (
+          <div className="receipt-detail__footer shrink-0 p-4 border-t bg-[#0b1220]">
+            <ConfirmDataButton transactionId={String(transaction.id)} onDone={onClose} />
           </div>
         )}
 

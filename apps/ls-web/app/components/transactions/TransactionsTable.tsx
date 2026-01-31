@@ -6,7 +6,8 @@
 import type { Transaction } from './TransactionList'
 import { formatDateOnly } from '@/app/lib/utils/format'
 import { formatCurrency } from '@/app/lib/utils/format'
-import { deriveAsyncStatus } from './status'
+import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 
 export interface TransactionsTableProps {
   transactions: Transaction[]
@@ -50,23 +51,9 @@ export function TransactionsTable({ transactions, onRowClick }: TransactionsTabl
             const tax = (transaction as any).tax_details || {}
             const gstAmount = typeof tax.gst_amount === 'number' ? tax.gst_amount : (Number(tax.gst_cents || 0) / 100)
             const pstAmount = typeof tax.pst_amount === 'number' ? tax.pst_amount : (Number(tax.pst_cents || 0) / 100)
-            const status = deriveAsyncStatus(transaction as any)
-            const statusLabel =
-              status === 'approved'
-                ? '✓ 已批准'
-                : status === 'pending' || status === 'needs_review'
-                  ? '待审核'
-                  : status === 'error' || status === 'warning'
-                    ? '需关注'
-                    : status
-            const statusClass =
-              status === 'approved'
-                ? 'bg-green-100 text-green-800'
-                : status === 'pending' || status === 'needs_review'
-                  ? 'bg-amber-100 text-amber-800'
-                  : status === 'error' || status === 'warning'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-gray-100 text-gray-800'
+            const status = getReceiptStatus(toReceiptLike(transaction as any))
+            const ui = getReceiptStatusUI(status)
+            const statusLabel = status === 'READY' ? `✓ ${ui.label}` : ui.label
 
             return (
               <tr
@@ -95,7 +82,10 @@ export function TransactionsTable({ transactions, onRowClick }: TransactionsTabl
                   {formatCurrency(Math.abs(transaction.total_amount ?? 0), transaction.currency)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <span className={`px-2 py-1 inline-flex text-xs font-semibold rounded-full ${statusClass}`}>
+                  <span
+                    className="px-2 py-1 inline-flex text-xs font-semibold rounded-full"
+                    style={{ color: ui.color, backgroundColor: `${ui.color}20` }}
+                  >
                     {statusLabel}
                   </span>
                 </td>

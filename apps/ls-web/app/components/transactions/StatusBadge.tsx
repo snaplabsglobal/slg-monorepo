@@ -1,39 +1,50 @@
 'use client'
 
-import { STATUS_CONFIG, deriveAsyncStatus } from './status'
+import { memo } from 'react'
+import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 
-export function StatusBadge({
+export const StatusBadge = memo(function StatusBadge({
   transaction,
   showDescription = false,
 }: {
-  transaction: {
+  transaction?: {
+    id: string
     status?: string | null
-    needs_review?: boolean | null
-    vendor_name?: string | null
-    ai_confidence?: number | null
-    raw_data?: any
-  }
+    is_verified?: boolean | null
+    [key: string]: unknown
+  } | null
   showDescription?: boolean
 }) {
-  const s = deriveAsyncStatus(transaction)
-  const cfg = STATUS_CONFIG[s]
+  const receiptLike = transaction ? toReceiptLike(transaction) : undefined
+  const status = getReceiptStatus(receiptLike)
+  if (status === 'UNKNOWN') return null
+
+  const ui = getReceiptStatusUI(status)
+  const icon =
+    status === 'READY' ? '✓' : status === 'NEEDS_CONFIRM' ? '⚠️' : status === 'FAILED' ? '✕' : status === 'PROCESSING' ? null : '·'
 
   return (
     <div className="inline-flex items-center gap-2">
       <span
-        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border"
+        style={{
+          backgroundColor: `${ui.color}20`,
+          color: ui.color,
+          borderColor: `${ui.color}60`,
+        }}
       >
-        <span aria-hidden>{cfg.icon}</span>
-        {cfg.label}
+        {icon != null && <span aria-hidden>{icon}</span>}
+        {ui.label}
       </span>
-      {s === 'pending' && (
+      {status === 'PROCESSING' && (
         <span
-          className="inline-block h-3 w-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"
+          className="inline-block h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin"
           aria-label="processing"
+          style={{ borderColor: ui.color }}
         />
       )}
-      {showDescription && <span className="text-xs text-gray-500">{cfg.description}</span>}
+      {showDescription && <span className="text-xs text-gray-500">{ui.label}</span>}
     </div>
   )
-}
-
+})

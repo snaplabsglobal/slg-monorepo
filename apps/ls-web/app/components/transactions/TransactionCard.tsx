@@ -22,7 +22,8 @@ import { TagSelector, TagList, type Tag } from '@/app/components/tags'
 import { CategorySelector } from '@/app/components/categories/CategorySelector'
 import type { Transaction } from './TransactionList'
 import { StatusBadge } from './StatusBadge'
-import { deriveAsyncStatus, STATUS_CONFIG } from './status'
+import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 import { PermanentDeleteDialog } from './PermanentDeleteDialog'
 import { formatDateOnly } from '@/app/lib/utils/format'
 
@@ -228,8 +229,9 @@ export function TransactionCard({
     }).format(amount)
   }
 
-  const asyncStatus = deriveAsyncStatus(transaction as any)
-  const statusCfg = STATUS_CONFIG[asyncStatus]
+  const receiptLike = toReceiptLike(transaction as any)
+  const receiptStatus = getReceiptStatus(receiptLike)
+  const statusUi = getReceiptStatusUI(receiptStatus)
 
   // Don't render deleted transactions in main list (eye-out-of-sight)
   // Only show them in recycle bin (when showRestoreButton is true)
@@ -239,11 +241,13 @@ export function TransactionCard({
 
   return (
     <div
-      className={`bg-white rounded-lg shadow-sm border-2 overflow-hidden transition-all ${statusCfg.border} hover:shadow-md`}
+      className="bg-white rounded-lg shadow-sm border-2 overflow-hidden transition-all hover:shadow-md"
+      style={{ borderColor: `${statusUi.color}60` }}
     >
       {/* Transaction Summary */}
       <div
-        className={`p-4 cursor-pointer transition-colors ${statusCfg.bg}`}
+        className="p-4 cursor-pointer transition-colors"
+        style={{ backgroundColor: `${statusUi.color}15` }}
         onClick={() => onOpenDetail?.(transaction.id)}
       >
         <div className="flex items-center justify-between">
@@ -278,7 +282,7 @@ export function TransactionCard({
             </div>
             <div className="flex items-center gap-4 text-sm text-gray-600">
               <span>{formatDateOnly(transaction.transaction_date)}</span>
-              <span className="text-xs text-gray-500">{statusCfg.description}</span>
+              <span className="text-xs text-gray-500">{statusUi.label}</span>
             </div>
             {tags.length > 0 && (
               <div className="mt-2">

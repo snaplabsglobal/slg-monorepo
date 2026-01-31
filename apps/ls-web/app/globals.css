@@ -32,3 +32,12 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* 財稅綠狀態欄：識別完成時進度條閃爍兩下 */
+@keyframes status-bar-flash {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; box-shadow: 0 0 14px #10b981; }
+}
+.status-bar-success-flash {
+  animation: status-bar-flash 0.45s ease 2;
+}
