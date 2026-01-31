@@ -21,7 +21,7 @@ export function OfflineIndicator() {
     }
   }, [])
 
-  // 仅离线时禁用浏览器下拉刷新，避免整页重载导致 UI 消失
+  // 仅离线时禁止「下拉触发整页刷新」，不禁止下拉手势本身（contain 只阻止 overscroll 传给浏览器触发重载，用户仍可做下拉动作）
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (isOnline) {
