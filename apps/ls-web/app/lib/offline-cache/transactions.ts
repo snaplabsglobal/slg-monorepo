@@ -99,13 +99,30 @@ export function toTransactionSummary(input: unknown): CachedTransaction | null {
       ? (attachments[0] as { url?: string }).url ?? null
       : null
 
+  const td =
+    o.tax_details != null && typeof o.tax_details === 'object'
+      ? (o.tax_details as Record<string, unknown>)
+      : null
+  const gstVal =
+    td?.gst_amount != null
+      ? toNum(td.gst_amount)
+      : td?.gst_cents != null
+        ? (toNum(td.gst_cents) ?? 0) / 100
+        : null
+  const pstVal =
+    td?.pst_amount != null
+      ? toNum(td.pst_amount)
+      : td?.pst_cents != null
+        ? (toNum(td.pst_cents) ?? 0) / 100
+        : null
+
   return {
     id,
     vendor_name: o.vendor_name ?? o.vendor ?? o.merchant ?? null,
     transaction_date: normalizeDate(o.transaction_date ?? o.date),
     total_amount: toNum(o.total_amount ?? o.total ?? o.amount),
-    gst: toNum(o.gst),
-    pst: toNum(o.pst),
+    gst: gstVal != null ? +Number(gstVal).toFixed(2) : null,
+    pst: pstVal != null ? +Number(pstVal).toFixed(2) : null,
     attachment_url:
       o.attachment_url ?? o.receipt_url ?? o.image_url ?? o.r2_url ?? firstAttachmentUrl ?? null,
     project_id: o.project_id ?? null,

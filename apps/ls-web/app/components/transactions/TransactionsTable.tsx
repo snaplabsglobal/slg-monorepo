@@ -6,7 +6,7 @@
 import type { Transaction } from './TransactionList'
 import { formatDateOnly } from '@/app/lib/utils/format'
 import { formatCurrency } from '@/app/lib/utils/format'
-import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { getReceiptStatus, getReceiptStatusUI, getTransactionTaxAndConfidence } from '@slo/shared-utils'
 import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 
 export interface TransactionsTableProps {
@@ -48,9 +48,7 @@ export function TransactionsTable({ transactions, onRowClick }: TransactionsTabl
         </thead>
         <tbody className="divide-y divide-gray-200">
           {transactions.map((transaction, index) => {
-            const tax = (transaction as any).tax_details || {}
-            const gstAmount = typeof tax.gst_amount === 'number' ? tax.gst_amount : (Number(tax.gst_cents || 0) / 100)
-            const pstAmount = typeof tax.pst_amount === 'number' ? tax.pst_amount : (Number(tax.pst_cents || 0) / 100)
+            const { gst: gstVal, pst: pstVal } = getTransactionTaxAndConfidence(transaction as any)
             const status = getReceiptStatus(toReceiptLike(transaction as any))
             const ui = getReceiptStatusUI(status)
             const statusLabel = status === 'READY' ? `✓ ${ui.label}` : ui.label
@@ -73,10 +71,10 @@ export function TransactionsTable({ transactions, onRowClick }: TransactionsTabl
                   {formatDateOnly(transaction.transaction_date)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-900">
-                  {formatCurrency(gstAmount, transaction.currency)}
+                  {gstVal != null ? formatCurrency(gstVal, transaction.currency) : '—'}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-900">
-                  {formatCurrency(pstAmount, transaction.currency)}
+                  {pstVal != null ? formatCurrency(pstVal, transaction.currency) : '—'}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
                   {formatCurrency(Math.abs(transaction.total_amount ?? 0), transaction.currency)}

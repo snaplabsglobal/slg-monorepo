@@ -1,58 +1,85 @@
-// CTO#1: Register transaction for async analysis (called by upload-queue worker after quick-upload success)
+// POST /api/receipts/:id/pending-analysis
+// Register transaction for async analysis (worker / script / UI). Cron only pulls pending_analysis.
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@slo/snap-auth'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: transactionId } = await params
-  if (!transactionId) {
-    return NextResponse.json({ error: 'Missing transaction id' }, { status: 400 })
-  }
+type Ctx = { params: Promise<{ id: string }> }
 
+export async function POST(_req: Request, context: Ctx) {
   try {
+    const { id } = await context.params
     const supabase = await createServerClient()
     const {
       data: { user },
-      error: authError,
     } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: orgMember } = await (supabase as any)
+    const { data: membership } = await supabase
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', user.id)
       .maybeSingle()
+    if (!membership?.organization_id) {
+      return NextResponse.json({ error: 'No organization' }, { status: 400 })
+    }
 
-    const organizationId = (orgMember as any)?.organization_id ?? null
+    // 1) Transaction exists and not locked (same rules as replace)
+    const { data: tx, error: txErr } = await supabase
+      .from('transactions')
+      .select('id, status, organization_id')
+      .eq('id', id)
+      .eq('organization_id', membership.organization_id)
+      .maybeSingle()
 
-    const { error: insertError } = await (supabase as any)
+    if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
+    if (!tx) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (['exported', 'locked', 'voided'].includes(tx.status ?? '')) {
+      return NextResponse.json(
+        { error: 'Transaction locked/exported/voided' },
+        { status: 409 }
+      )
+    }
+
+    const now = new Date().toISOString()
+
+    // 2) Upsert pending_analysis (unique on transaction_id)
+    const { error: insErr } = await supabase
       .from('pending_analysis')
       .upsert(
         {
-          transaction_id: transactionId,
-          organization_id: organizationId,
+          transaction_id: id,
+          organization_id: tx.organization_id ?? membership.organization_id,
           status: 'pending',
+          next_attempt_at: now,
           retry_count: 0,
-          next_attempt_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          last_error: null,
+          updated_at: now,
         },
-        { onConflict: 'transaction_id', ignoreDuplicates: false }
+        { onConflict: 'transaction_id' }
       )
 
-    if (insertError) {
-      console.error('[pending-analysis] Insert error:', insertError)
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    console.error('[pending-analysis] Error:', e)
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    // 3) Set transaction to pending (same as replace "Analyzing...")
+    const { error: updErr } = await supabase
+      .from('transactions')
+      .update({
+        status: 'pending',
+        needs_review: true,
+        ai_confidence: 0,
+        vendor_name: 'Analyzing...',
+        updated_at: now,
+      })
+      .eq('id', id)
+      .eq('organization_id', membership.organization_id)
+
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

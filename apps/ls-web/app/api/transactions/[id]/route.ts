@@ -29,9 +29,19 @@ function pickUpdatableFields(body: any) {
     if (!Number.isNaN(n)) updates.total_amount = n
   }
 
-  // tax_details may be JSONB; allow replacing whole object (optional)
+  // tax_details: only patch when we have real values; never persist 0 for "unknown" (prevents accident spread).
+  // Frontend must also never send tax_details with 0 for missing tax (sanitizePatch in TransactionDetailSlideOver).
   if (body?.tax_details && typeof body.tax_details === 'object') {
-    updates.tax_details = body.tax_details
+    const td = { ...body.tax_details } as Record<string, unknown>
+    if (td.gst_amount === 0 || td.gst_cents === 0) {
+      delete td.gst_amount
+      delete td.gst_cents
+    }
+    if (td.pst_amount === 0 || td.pst_cents === 0) {
+      delete td.pst_amount
+      delete td.pst_cents
+    }
+    if (Object.keys(td).length > 0) updates.tax_details = td
   }
 
   return updates

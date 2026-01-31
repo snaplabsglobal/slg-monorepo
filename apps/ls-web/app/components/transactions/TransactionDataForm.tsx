@@ -4,6 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { StatusBadge } from './StatusBadge'
 import { StatusBadgeSkeleton } from '@/app/components/ui/LoadingSkeleton'
 import { DeletedInfoBanner } from './DeletedInfoBanner'
+import { getTransactionTaxAndConfidence } from '@slo/shared-utils'
 import {
   isSuspiciousDate,
   yearsFromNow,
@@ -75,27 +76,13 @@ function TransactionDataFormInner(
   const isRefund = Boolean(transaction?.raw_data?.is_refund)
   const suspiciousDate = useMemo(() => isSuspiciousDate(date), [date])
 
-  const tax = useMemo(() => {
-    const td = transaction.tax_details || {}
-    const gst = typeof td.gst_amount === 'number' ? td.gst_amount : (Number(td.gst_cents || 0) / 100)
-    const pst = typeof td.pst_amount === 'number' ? td.pst_amount : (Number(td.pst_cents || 0) / 100)
-    const rawTotal = Number(transaction.total_amount ?? 0)
-    const isNeg = isRefund && rawTotal > 0
-    return {
-      gst,
-      pst,
-      /** For display: refund with positive stored amount → show negative */
-      displayTotal: isNeg ? -Math.abs(rawTotal) : rawTotal,
-    }
-  }, [transaction.tax_details, transaction.total_amount, isRefund])
-
-  const confidence = useMemo(() => {
-    const c = transaction.ai_confidence
-    if (typeof c === 'number') return c
-    const rd = transaction.raw_data || {}
-    const overall = rd?.confidence?.overall
-    return typeof overall === 'number' ? overall : null
-  }, [transaction.ai_confidence, transaction.raw_data])
+  const { gst, pst, total, confidence, needs_review } = useMemo(
+    () => getTransactionTaxAndConfidence(transaction),
+    [transaction]
+  )
+  const displayTotal = isRefund && total > 0 ? -Math.abs(total) : total
+  const displayGst = gst ?? null
+  const displayPst = pst ?? null
 
   const isDirty =
     String(transaction.vendor_name || '') !== String(vendorName || '') ||
@@ -287,18 +274,25 @@ function TransactionDataFormInner(
           )}
         </div>
 
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className={`rounded-xl border bg-white p-4 shadow-sm ${needs_review ? 'border-amber-300 bg-amber-50/50' : 'border-gray-100'}`}>
           <p className="text-xs font-semibold text-gray-700 mb-2">Canada tax breakdown</p>
+          {needs_review && (
+            <p className="text-xs text-amber-700 mb-2">需要確認：稅金未識別或為空，請核對</p>
+          )}
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">GST (5%)</span>
-            <span className="font-semibold" style={{ color: '#10b981' }}>
-              {isRefund && tax.gst > 0 ? '−' : ''}${Math.abs(tax.gst).toFixed(2)}
+            <span className="font-semibold" style={displayGst != null ? { color: '#10b981' } : undefined}>
+              {displayGst != null
+                ? `${isRefund && displayGst > 0 ? '−' : ''}$${Math.abs(displayGst).toFixed(2)}`
+                : '—'}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm mt-1">
             <span className="text-gray-600">PST (7%)</span>
-            <span className="font-semibold" style={{ color: '#10b981' }}>
-              {isRefund && tax.pst > 0 ? '−' : ''}${Math.abs(tax.pst).toFixed(2)}
+            <span className="font-semibold" style={displayPst != null ? { color: '#10b981' } : undefined}>
+              {displayPst != null
+                ? `${isRefund && displayPst > 0 ? '−' : ''}$${Math.abs(displayPst).toFixed(2)}`
+                : '—'}
             </span>
           </div>
           <div className="border-t border-gray-100 my-3" />
@@ -313,8 +307,8 @@ function TransactionDataFormInner(
                   className="w-28 text-right px-2 py-1 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 />
               ) : (
-                <span className="text-lg font-bold" style={{ color: tax.displayTotal < 0 ? '#059669' : '#10b981' }}>
-                  {tax.displayTotal < 0 ? '−' : ''}${Math.abs(tax.displayTotal).toFixed(2)} {transaction.currency || 'CAD'}
+                <span className="text-lg font-bold" style={{ color: displayTotal < 0 ? '#059669' : '#10b981' }}>
+                  {displayTotal < 0 ? '−' : ''}${Math.abs(displayTotal).toFixed(2)} {transaction.currency || 'CAD'}
                 </span>
               )}
             </div>

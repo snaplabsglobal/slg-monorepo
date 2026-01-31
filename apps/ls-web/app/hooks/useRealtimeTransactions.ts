@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { getBrowserSupabase } from '@/app/lib/supabase/browser'
 import { getReceiptStatus } from '@slo/shared-utils'
 import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 import { useOffline } from '@/app/hooks/useOffline'
@@ -46,34 +46,27 @@ export function useRealtimeTransactions(
   const transactionsRef = useRef<Transaction[]>([])
   transactionsRef.current = transactions
 
-  // Create Supabase client once (memoized) - stable reference to prevent re-subscription
+  // Single browser Supabase client (same as subscribeTransaction) to avoid "Subscription timed out" from multiple connections
   const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    [] // Empty deps - client should never change
+    () => (typeof window !== 'undefined' ? getBrowserSupabase() : null),
+    []
   )
-  
-  // Memoize channel name to prevent recreation
+
   const channelName = useMemo(
     () => (organizationId ? `transactions-${organizationId}` : 'transactions-global'),
     [organizationId]
   )
 
   useEffect(() => {
-    // CRITICAL: Early return if organizationId is undefined - don't subscribe without it
     if (!organizationId) {
       setIsLoading(false)
       return
     }
-
-    // Offline: do not fetch and do not start 5s polling (avoid "hitting the wall" every 5s)
     if (isOffline) {
       setIsLoading(false)
       return
     }
+    if (!supabase) return
 
     mountedRef.current = true
     isCleaningUpRef.current = false
@@ -179,124 +172,109 @@ export function useRealtimeTransactions(
       }
     }, 30000)
 
-    // CRITICAL: Check if channel already exists to prevent duplicate subscriptions
-    if (channelRef.current) {
-      return () => {
-        clearInterval(refreshInterval)
-        window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
-        window.removeEventListener('transaction-verified', handleTransactionVerified)
+    let retry = 0
+    const sub = () => {
+      if (isCleaningUpRef.current || !mountedRef.current) return
+      if (channelRef.current) {
+        try {
+          supabase.removeChannel(channelRef.current)
+        } catch {
+          /* ignore */
+        }
+        channelRef.current = null
       }
+
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'transactions',
+          },
+          (payload) => {
+            const newRow = payload.new as Record<string, unknown> | null
+            const oldRow = payload.old as Record<string, unknown> | null
+            const txOrgId = (newRow?.organization_id || oldRow?.organization_id) as string | undefined
+            if (organizationId && txOrgId !== organizationId) return
+
+            if (mountedRef.current) {
+              const CRITICAL_KEYS = [
+                'deleted_at', 'voided_at', 'status', 'needs_review', 'is_verified', 'vendor_name',
+                'total_amount', 'transaction_date', 'tax_details', 'updated_at',
+                'category_user', 'attachment_url', 'is_suspected_duplicate',
+              ] as const
+
+              setTransactions((prev) => {
+                const transactionMap = new Map<string, Transaction>()
+                prev.forEach((tx) => {
+                  if (!tx.deleted_at) transactionMap.set(tx.id, tx)
+                })
+
+                if (payload.new) {
+                  const newTx = payload.new as Transaction
+                  if (!newTx.deleted_at) {
+                    const existing = transactionMap.get(newTx.id)
+                    const isStable = existing?.status === 'approved'
+                    if (isStable && existing) {
+                      const merged = { ...existing } as Transaction
+                      CRITICAL_KEYS.forEach((key) => {
+                        if (key in newTx && (newTx as any)[key] !== undefined) {
+                          (merged as any)[key] = (newTx as any)[key]
+                        }
+                      })
+                      transactionMap.set(newTx.id, merged)
+                    } else {
+                      transactionMap.set(newTx.id, newTx)
+                    }
+                  } else {
+                    transactionMap.delete(newTx.id)
+                  }
+                }
+                if (payload.eventType === 'UPDATE' && payload.new?.deleted_at) {
+                  transactionMap.delete(payload.new.id)
+                }
+                if (payload.eventType === 'DELETE' && payload.old?.id) {
+                  transactionMap.delete(payload.old.id)
+                }
+                const updated = Array.from(transactionMap.values())
+                const pending = updated.filter(
+                  (t: Transaction) => getReceiptStatus(toReceiptLike(t as any)) === 'PROCESSING'
+                ).length
+                setPendingCount(pending)
+                return updated
+              })
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') retry = 0
+          if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            hadChannelErrorRef.current = true
+            if (isCleaningUpRef.current) return
+            const wait = Math.min(30000, 500 * Math.pow(2, retry++))
+            setTimeout(() => {
+              if (isCleaningUpRef.current) return
+              sub()
+            }, wait)
+          }
+        })
+
+      channelRef.current = channel
     }
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'transactions',
-          // Note: Filter by organization_id in the callback instead of in the subscription
-          // This ensures we get all events and filter client-side
-        },
-        (payload) => {
-          // Filter by organization_id if specified
-          const newRow = payload.new as Record<string, unknown> | null
-          const oldRow = payload.old as Record<string, unknown> | null
-          const txOrgId = (newRow?.organization_id || oldRow?.organization_id) as string | undefined
-          if (organizationId && txOrgId !== organizationId) {
-            return
-          }
-          
-          // Update state using upsert logic (Map by ID) to prevent duplicates
-          if (mountedRef.current) {
-            // Data lock: critical fields only when existing tx is already "Ready" (approved)
-            // to avoid flicker from minor Realtime updates (e.g. ai_confidence, raw_data)
-            const CRITICAL_KEYS = [
-              'deleted_at', 'voided_at', 'status', 'needs_review', 'is_verified', 'vendor_name',
-              'total_amount', 'transaction_date', 'tax_details', 'updated_at',
-              'category_user', 'attachment_url', 'is_suspected_duplicate',
-            ] as const
+    sub()
 
-            setTransactions((prev) => {
-              const transactionMap = new Map<string, Transaction>()
-              prev.forEach((tx) => {
-                if (!tx.deleted_at) {
-                  transactionMap.set(tx.id, tx)
-                }
-              })
+    const onOnline = () => {
+      if (isCleaningUpRef.current) return
+      sub()
+    }
+    window.addEventListener('online', onOnline)
 
-              if (payload.new) {
-                const newTx = payload.new as Transaction
-                if (!newTx.deleted_at) {
-                  const existing = transactionMap.get(newTx.id)
-                  const isStable = existing?.status === 'approved'
-                  if (isStable && existing) {
-                    const merged = { ...existing } as Transaction
-                    CRITICAL_KEYS.forEach((key) => {
-                      if (key in newTx && (newTx as any)[key] !== undefined) {
-                        (merged as any)[key] = (newTx as any)[key]
-                      }
-                    })
-                    transactionMap.set(newTx.id, merged)
-                  } else {
-                    transactionMap.set(newTx.id, newTx)
-                  }
-                } else {
-                  transactionMap.delete(newTx.id)
-                }
-              }
-              
-              // Remove deleted transaction (UPDATE with deleted_at)
-              if (payload.eventType === 'UPDATE' && payload.new?.deleted_at) {
-                transactionMap.delete(payload.new.id)
-              }
-              
-              // Remove deleted transaction (DELETE event)
-              if (payload.eventType === 'DELETE' && payload.old?.id) {
-                transactionMap.delete(payload.old.id)
-              }
-              
-              const updated = Array.from(transactionMap.values())
-              
-              // Update pending count based on updated transactions
-              const pending = updated.filter(
-                (t: Transaction) => getReceiptStatus(toReceiptLike(t as any)) === 'PROCESSING'
-              ).length
-              setPendingCount(pending)
-              return updated
-            })
-            
-            // CRITICAL: DO NOT call loadTransactions() here - it causes infinite loops
-            // The upsert logic above is sufficient to keep state in sync
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          hadChannelErrorRef.current = true
-          console.error('[RealtimeTransactions] ❌ Channel error - Realtime may not be enabled for table "transactions" (check Supabase Dashboard → Database → Replication)')
-        } else if (status === 'TIMED_OUT') {
-          hadChannelErrorRef.current = true
-          console.error('[RealtimeTransactions] ⏱️ Subscription timed out')
-          // We do NOT clear transactions or clearInterval(refreshInterval): local state and
-          // manual polling backup keep the UI working; Realtime may reconnect on next effect.
-        } else if (status === 'CLOSED') {
-          // Skip redundant warn when close is due to a prior error, or during our own cleanup
-          if (!isCleaningUpRef.current && !hadChannelErrorRef.current) {
-            console.debug('[RealtimeTransactions] Channel closed')
-          }
-          // CRITICAL: DO NOT trigger reconnection here - it causes loops
-          // Supabase will handle reconnection automatically, or useEffect will re-run if orgId changes
-          // Removing the manual reconnect logic to prevent the "Cleaning up channel" loop
-        }
-      })
-
-    channelRef.current = channel
-
-    // CRITICAL: Cleanup function - only runs on unmount or when organizationId/channelName actually changes
     return () => {
       isCleaningUpRef.current = true
+      window.removeEventListener('online', onOnline)
       clearInterval(refreshInterval)
       window.removeEventListener('transaction-analyzed', handleTransactionAnalyzed)
       window.removeEventListener('transaction-verified', handleTransactionVerified)

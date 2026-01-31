@@ -129,14 +129,31 @@ export function TransactionDetailSlideOver({
     return transaction.vendor_name ? `Receipt detail — ${transaction.vendor_name}` : 'Receipt detail — Unknown vendor'
   }, [transaction])
 
+  /** Never send tax as 0 for "unknown": only patch tax_details when we have real values. */
+  function sanitizePatch(updates: Partial<TransactionDetail>): Partial<TransactionDetail> {
+    const out = { ...updates }
+    if (out.tax_details != null && typeof out.tax_details === 'object') {
+      const td = { ...(out.tax_details as Record<string, unknown>) }
+      if (td.gst_amount === 0) delete td.gst_amount
+      if (td.gst_cents === 0) delete td.gst_cents
+      if (td.pst_amount === 0) delete td.pst_amount
+      if (td.pst_cents === 0) delete td.pst_cents
+      out.tax_details = Object.keys(td).length > 0 ? (td as TransactionDetail['tax_details']) : undefined
+      if (out.tax_details === undefined) delete (out as Record<string, unknown>).tax_details
+    }
+    return out
+  }
+
+  /** Patch only meaningful fields; on failure we do not update state so tax display stays unchanged. */
   async function patch(updates: Partial<TransactionDetail>) {
     if (!transactionId) return
     setSaving(true)
     try {
+      const body = sanitizePatch(updates)
       const res = await fetch(`/api/transactions/${transactionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(body),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {

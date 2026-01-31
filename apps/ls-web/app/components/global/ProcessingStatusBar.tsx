@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useRealtimeTransactions } from '@/app/hooks/useRealtimeTransactions'
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { getBrowserSupabase } from '@/app/lib/supabase/browser'
 import { getReceiptStatus } from '@slo/shared-utils'
 import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 
@@ -13,11 +13,7 @@ export function ProcessingStatusBar() {
   const router = useRouter()
   const [organizationId, setOrganizationId] = useState<string | undefined>(undefined)
   const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
+    () => (typeof window !== 'undefined' ? getBrowserSupabase() : null),
     []
   )
 
@@ -27,15 +23,17 @@ export function ProcessingStatusBar() {
   const [justCompleted, setJustCompleted] = useState(false)
 
   useEffect(() => {
+    if (!supabase) return
+    const client = supabase
     let mounted = true
     async function fetchOrg() {
       try {
         const {
           data: { user },
-        } = await supabase.auth.getUser()
+        } = await client.auth.getUser()
         if (!user || !mounted) return
 
-        const { data: membership } = await supabase
+        const { data: membership } = await client
           .from('organization_members')
           .select('organization_id')
           .eq('user_id', user.id)

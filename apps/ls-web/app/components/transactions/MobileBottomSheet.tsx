@@ -136,20 +136,36 @@ export function MobileBottomSheet({
     }
   }, [transactionId, isOpen, onClose, includeDeleted])
 
+  /** Never send tax as 0; on failure do not update state so tax display stays unchanged. */
+  const sanitizePatch = (u: Partial<TransactionDetail>): Partial<TransactionDetail> => {
+    const out = { ...u }
+    if (out.tax_details != null && typeof out.tax_details === 'object') {
+      const td = { ...(out.tax_details as Record<string, unknown>) }
+      if (td.gst_amount === 0) delete td.gst_amount
+      if (td.gst_cents === 0) delete td.gst_cents
+      if (td.pst_amount === 0) delete td.pst_amount
+      if (td.pst_cents === 0) delete td.pst_cents
+      out.tax_details = Object.keys(td).length > 0 ? (td as TransactionDetail['tax_details']) : undefined
+      if (out.tax_details === undefined) delete (out as Record<string, unknown>).tax_details
+    }
+    return out
+  }
+
   const handleSave = async (updates: Partial<TransactionDetail>) => {
     if (!transaction?.id) return
     try {
+      const body = sanitizePatch(updates)
       const res = await fetch(`/api/transactions/${transaction.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(body),
       })
-      const json = await res.json()
-      if (res.ok && json.transaction) {
-        setTransaction(json.transaction)
-      }
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || `Update failed (${res.status})`)
+      if (json.transaction) setTransaction(json.transaction)
     } catch (e) {
       console.error('Failed to save transaction:', e)
+      // Do not update state on failure so tax display stays unchanged
     }
   }
 

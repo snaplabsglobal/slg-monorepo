@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import type { Transaction } from './TransactionList'
-import { getReceiptStatus, getReceiptStatusUI } from '@slo/shared-utils'
+import { getReceiptStatus, getReceiptStatusUI, getTransactionTaxAndConfidence } from '@slo/shared-utils'
 import { toReceiptLike } from '@/app/lib/receipts/mapReceiptLike'
 import { formatDateOnly } from '@/app/lib/utils/format'
 
@@ -54,12 +54,8 @@ function StatusDot({ status }: { status: ReturnType<typeof getReceiptStatus> }) 
 export function TransactionVisualCard({ transaction, onClick, priority }: TransactionVisualCardProps) {
   const [imageError, setImageError] = useState(false)
   const receiptStatus = getReceiptStatus(toReceiptLike(transaction as any))
-
-  // Get tax details (for grey footnote, not green box)
-  const taxDetails = (transaction as any).tax_details || {}
-  const gstAmount = typeof taxDetails.gst_amount === 'number'
-    ? taxDetails.gst_amount
-    : Number(taxDetails.gst_cents || 0) / 100
+  const { gst } = getTransactionTaxAndConfidence(transaction as any)
+  const showGst = gst != null && gst > 0
 
   const projectName =
     (transaction as any).project_name || (transaction as any).raw_data?.project?.name || null
@@ -128,9 +124,9 @@ export function TransactionVisualCard({ transaction, onClick, priority }: Transa
             <p className={`text-xl font-bold ${totalColorClass}`}>
               {sign}{formatAmount(amount, transaction.currency)}
             </p>
-            {gstAmount > 0 && (
+            {showGst && (
               <p className="text-xs text-gray-500 mt-0.5">
-                (Incl. GST {formatAmount(gstAmount, transaction.currency)}
+                (Incl. GST {formatAmount(gst, transaction.currency)}
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">可抵扣</span>)
               </p>
             )}
