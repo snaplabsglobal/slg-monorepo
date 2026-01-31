@@ -66,7 +66,7 @@ export function TransactionDetailSlideOver({
         }
 
         const res = await fetchWithOffline(url)
-        if (res.offline) {
+        if ('offline' in res) {
           if (!cancelled) {
             if (!cached) setError('离线模式：此收据详情尚未本地化')
             setLoading(false)
@@ -330,7 +330,7 @@ export function TransactionDetailSlideOver({
             <div className="h-full flex flex-col">
               {isOfflineCachedOnly && (
                 <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm mx-4 mt-2">
-                  离线显示缓存版本
+                  离线模式：显示最近缓存版本（网络恢复后将自动更新）
                 </div>
               )}
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 overflow-hidden min-h-0">

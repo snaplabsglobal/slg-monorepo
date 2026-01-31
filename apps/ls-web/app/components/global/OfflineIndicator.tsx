@@ -21,19 +21,6 @@ export function OfflineIndicator() {
     }
   }, [])
 
-  // 仅离线时禁止「下拉触发整页刷新」，不禁止下拉手势本身（contain 只阻止 overscroll 传给浏览器触发重载，用户仍可做下拉动作）
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (isOnline) {
-      document.body.style.overscrollBehaviorY = ''
-    } else {
-      document.body.style.overscrollBehaviorY = 'contain'
-    }
-    return () => {
-      document.body.style.overscrollBehaviorY = ''
-    }
-  }, [isOnline])
-
   if (isOnline) return null
 
   return (

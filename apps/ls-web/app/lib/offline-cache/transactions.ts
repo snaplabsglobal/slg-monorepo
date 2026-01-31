@@ -24,10 +24,11 @@ export type CachedTransaction = Record<string, unknown> & { id: string }
 
 export async function putTransaction(transaction: CachedTransaction): Promise<void> {
   const db = await openDB()
+  const normalized = { ...transaction, id: String(transaction.id) }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_TRANSACTIONS, 'readwrite')
     const store = tx.objectStore(STORE_TRANSACTIONS)
-    store.put(transaction)
+    store.put(normalized)
     tx.oncomplete = () => {
       db.close()
       resolve()
@@ -46,12 +47,72 @@ export async function getTransaction(id: string): Promise<CachedTransaction | un
     const store = tx.objectStore(STORE_TRANSACTIONS)
     const req = store.get(id)
     req.onsuccess = () => {
+      const v = req.result as (CachedTransaction & { _schema_v?: number }) | undefined
       db.close()
-      resolve((req.result as CachedTransaction) ?? undefined)
+      if (!v) {
+        resolve(undefined)
+        return
+      }
+      if (v._schema_v != null && v._schema_v !== 1) {
+        resolve(undefined)
+        return
+      }
+      resolve(v as CachedTransaction)
     }
     req.onerror = () => {
       db.close()
       reject(req.error)
     }
   })
+}
+
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  if (typeof v === 'number' && !Number.isNaN(v)) return v
+  if (typeof v === 'string') {
+    const n = Number(v.replace(/,/g, ''))
+    return Number.isNaN(n) ? null : n
+  }
+  return null
+}
+
+function normalizeDate(v: unknown): string | null {
+  if (v == null) return null
+  if (typeof v === 'string' && v.length >= 10) return v.substring(0, 10)
+  if (typeof v === 'string') return v
+  return null
+}
+
+/** Minimal whitelisted fields for offline detail rendering; no spread of full input. */
+export function toTransactionSummary(input: unknown): CachedTransaction | null {
+  if (!input || typeof input !== 'object') return null
+  const o = input as Record<string, unknown>
+  const id = o.id != null ? String(o.id) : ''
+  if (!id) return null
+
+  const attachments = o.attachments
+  const firstAttachmentUrl =
+    Array.isArray(attachments) &&
+    attachments[0] != null &&
+    typeof attachments[0] === 'object' &&
+    'url' in (attachments[0] as object)
+      ? (attachments[0] as { url?: string }).url ?? null
+      : null
+
+  return {
+    id,
+    vendor_name: o.vendor_name ?? o.vendor ?? o.merchant ?? null,
+    transaction_date: normalizeDate(o.transaction_date ?? o.date),
+    total_amount: toNum(o.total_amount ?? o.total ?? o.amount),
+    gst: toNum(o.gst),
+    pst: toNum(o.pst),
+    attachment_url:
+      o.attachment_url ?? o.receipt_url ?? o.image_url ?? o.r2_url ?? firstAttachmentUrl ?? null,
+    project_id: o.project_id ?? null,
+    organization_id: o.organization_id ?? null,
+    updated_at: o.updated_at ?? null,
+    deleted_at: o.deleted_at ?? null,
+    _schema_v: 1,
+    _cached_at: Date.now(),
+  } as CachedTransaction
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { deriveAsyncStatus } from '@/app/components/transactions/status'
 import { useOffline } from '@/app/hooks/useOffline'
+import { putTransaction, toTransactionSummary } from '@/app/lib/offline-cache/transactions'
 
 type Transaction = {
   id: string
@@ -104,6 +105,22 @@ export function useRealtimeTransactions(
           const pending = uniqueTransactions.filter((t: Transaction) => deriveAsyncStatus(t) === 'pending').length
           setPendingCount(pending)
           setIsLoading(false)
+
+          // Non-blocking: cache summaries for offline detail (list seen once = detail openable offline)
+          if (uniqueTransactions.length > 0) {
+            void (async () => {
+              try {
+                const MAX_CACHE = 50
+                const list = uniqueTransactions.slice(0, MAX_CACHE)
+                for (const tx of list) {
+                  const summary = toTransactionSummary(tx)
+                  if (summary?.id) await putTransaction(summary)
+                }
+              } catch {
+                // Ignore cache errors; do not block UI
+              }
+            })()
+          }
         }
       } catch (err) {
         console.error('[RealtimeTransactions] Load error:', err)

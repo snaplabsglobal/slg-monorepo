@@ -81,7 +81,7 @@ export function MobileBottomSheet({
         }
 
         const res = await fetchWithOffline(url)
-        if (res.offline) {
+        if ('offline' in res) {
           if (!cancelled) {
             if (!cached) setError('离线模式：此收据详情尚未本地化')
             setLoading(false)
@@ -278,7 +278,7 @@ export function MobileBottomSheet({
 
           {isOfflineCachedOnly && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm my-2">
-              离线显示缓存版本
+              离线模式：显示最近缓存版本（网络恢复后将自动更新）
             </div>
           )}
 
