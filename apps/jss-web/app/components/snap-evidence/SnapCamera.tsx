@@ -303,8 +303,8 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Permission request screen
-  if (hasPermission === null || !isReady) {
+  // Permission denied screen
+  if (hasPermission === false) {
     return (
       <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
         <button
@@ -316,28 +316,19 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
           </svg>
         </button>
 
-        {hasPermission === false ? (
-          <>
-            <div className="w-24 h-24 mb-6 text-red-400">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-full h-full">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Camera Unavailable</h2>
-            <p className="text-gray-400 mb-4">{error}</p>
-            <button
-              onClick={startCamera}
-              className="px-6 py-3 bg-amber-500 text-white rounded-full"
-            >
-              Try Again
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-white">Starting camera...</p>
-          </>
-        )}
+        <div className="w-24 h-24 mb-6 text-red-400">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-full h-full">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2">Camera Unavailable</h2>
+        <p className="text-gray-400 mb-4">{error}</p>
+        <button
+          onClick={startCamera}
+          className="px-6 py-3 bg-amber-500 text-white rounded-full"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
@@ -347,7 +338,23 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
       {/* Hidden canvas for capture */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Camera view */}
+      {/* Loading overlay - shown while camera initializing */}
+      {!isReady && (
+        <div className="absolute inset-0 z-50 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
+          <button
+            onClick={handleClose}
+            className="absolute top-4 left-4 p-2 text-white hover:bg-white/10 rounded-full"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-white">Starting camera...</p>
+        </div>
+      )}
+
+      {/* Camera view - video always rendered so ref works */}
       <div className="flex-1 relative">
         <video
           ref={videoRef}
