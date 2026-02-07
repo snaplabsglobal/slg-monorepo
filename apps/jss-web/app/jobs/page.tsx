@@ -22,7 +22,7 @@ export default async function JobsPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold text-amber-600">JobSite Snap</h1>
+            <h1 className="text-xl font-bold" style={{ color: '#FF7A00' }}>JobSite Snap</h1>
             <p className="text-xs text-gray-500">Job Photos</p>
           </div>
           <div className="flex items-center gap-2">

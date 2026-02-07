@@ -105,7 +105,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
                   <span className={`
                     absolute top-1 left-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                     ${photo.stage === 'before' ? 'bg-blue-500 text-white' : ''}
-                    ${photo.stage === 'during' ? 'bg-amber-500 text-white' : ''}
+                    ${photo.stage === 'during' ? 'bg-[#FF7A00] text-white' : ''}
                     ${photo.stage === 'after' ? 'bg-green-500 text-white' : ''}
                   `}>
                     {photo.stage.charAt(0).toUpperCase() + photo.stage.slice(1)}
@@ -120,7 +120,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
       {/* Loading State */}
       {loading && (
         <div className="text-center py-8">
-          <div className="inline-block w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-6 h-6 border-2 border-[#FF7A00] border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
@@ -129,7 +129,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
         <div ref={loadMoreRef} className="text-center py-4">
           <button
             onClick={() => fetchPhotos()}
-            className="px-4 py-2 text-amber-600 hover:text-amber-700"
+            className="px-4 py-2 text-[#FF7A00] hover:text-amber-700"
           >
             Load More
           </button>
@@ -169,7 +169,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
                     <span className={`
                       px-2 py-0.5 text-xs rounded
                       ${selectedPhoto.stage === 'before' ? 'bg-blue-500' : ''}
-                      ${selectedPhoto.stage === 'during' ? 'bg-amber-500' : ''}
+                      ${selectedPhoto.stage === 'during' ? 'bg-[#FF7A00]' : ''}
                       ${selectedPhoto.stage === 'after' ? 'bg-green-500' : ''}
                     `}>
                       {selectedPhoto.stage}
@@ -279,7 +279,7 @@ function PhotoUploadButton({ jobId, onUploaded }: PhotoUploadButtonProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={isUploading}
-        className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow-sm disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-lg hover:bg-[#E66A00] shadow-sm disabled:opacity-50"
       >
         {isUploading ? (
           <>
@@ -330,13 +330,33 @@ export function JobDetail({ job }: JobDetailProps) {
                 <p className="text-xs text-gray-500 truncate">{job.address}</p>
               )}
             </div>
-            <PhotoUploadButton jobId={job.id} onUploaded={handlePhotoUploaded} />
           </div>
         </div>
       </header>
 
       {/* Content */}
       <main className="container mx-auto px-4 py-4">
+        {/* Primary Action: Take Photos - Full width, prominent */}
+        <Link
+          href={`/jobs/${job.id}/camera`}
+          className="block w-full py-3.5 text-center text-white font-medium rounded-lg shadow-sm mb-6"
+          style={{ backgroundColor: '#FF7A00' }}
+        >
+          <span className="inline-flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Take Photos
+          </span>
+        </Link>
+
+        {/* Recent Photos Section */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-gray-700">Recent Photos</h2>
+          <PhotoUploadButton jobId={job.id} onUploaded={handlePhotoUploaded} />
+        </div>
+
         <PhotoTimeline
           key={refreshKey}
           jobId={job.id}
@@ -344,10 +364,11 @@ export function JobDetail({ job }: JobDetailProps) {
         />
       </main>
 
-      {/* Camera FAB for mobile */}
+      {/* Camera FAB for mobile - hidden on desktop since we have prominent button */}
       <Link
         href={`/jobs/${job.id}/camera`}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-amber-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-amber-600 md:hidden"
+        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center sm:hidden"
+        style={{ backgroundColor: '#FF7A00' }}
       >
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />

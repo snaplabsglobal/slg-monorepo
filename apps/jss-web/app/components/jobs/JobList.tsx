@@ -69,7 +69,7 @@ function CreateJobModal({ isOpen, onClose, onCreated }: CreateJobModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Smith Residence Kitchen Remodel"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               autoFocus
             />
           </div>
@@ -83,7 +83,7 @@ function CreateJobModal({ isOpen, onClose, onCreated }: CreateJobModalProps) {
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="e.g., 123 Main St, City, State"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
           </div>
 
@@ -104,7 +104,7 @@ function CreateJobModal({ isOpen, onClose, onCreated }: CreateJobModalProps) {
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-[#FF7A00] text-white rounded-lg hover:bg-[#E66A00] disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Creating...' : 'Create Job'}
@@ -129,7 +129,7 @@ function JobCard({ job }: JobCardProps) {
   return (
     <Link
       href={`/jobs/${job.id}`}
-      className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-amber-300 transition-all"
+      className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-orange-300 transition-all"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -209,7 +209,7 @@ export function JobList() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-lg hover:bg-[#E66A00] shadow-sm"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -227,7 +227,7 @@ export function JobList() {
             className={`
               px-3 py-1.5 text-sm rounded-full transition-colors
               ${statusFilter === status
-                ? 'bg-amber-500 text-white'
+                ? 'bg-[#FF7A00] text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }
             `}
@@ -240,7 +240,7 @@ export function JobList() {
       {/* Loading State */}
       {loading && (
         <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-8 h-8 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin" />
           <p className="mt-2 text-gray-500">Loading jobs...</p>
         </div>
       )}
@@ -268,7 +268,7 @@ export function JobList() {
           <p className="mt-1 text-gray-500">Create your first job to start capturing photos</p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+            className="mt-4 px-4 py-2 bg-[#FF7A00] text-white rounded-lg hover:bg-[#E66A00]"
           >
             Create Your First Job
           </button>
