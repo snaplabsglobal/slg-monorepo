@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Protected routes that require authentication
-  const protectedPaths = ['/dashboard', '/profile', '/settings', '/projects', '/timecards']
+  const protectedPaths = ['/dashboard', '/profile', '/settings', '/projects', '/timecards', '/jobs']
   const isProtectedPath = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   )
@@ -58,11 +58,16 @@ export async function middleware(request: NextRequest) {
   // ============================================
   // 3. 应用级别权限检查（核心逻辑）
   // ============================================
-  // NOTE: For local development, skip paywall checks
+  // Skip paywall checks in development and Vercel preview environments
+  // VERCEL_ENV: 'development' | 'preview' | 'production'
   // TODO: Re-enable for production when subscription tiers are set up
-  const isDev = process.env.NODE_ENV === 'development'
+  const skipPaywall =
+    process.env.NODE_ENV === 'development' ||
+    process.env.VERCEL_ENV === 'development' ||
+    process.env.VERCEL_ENV === 'preview' ||
+    process.env.SKIP_PAYWALL === 'true'
 
-  if (user && isProtectedPath && !isDev) {
+  if (user && isProtectedPath && !skipPaywall) {
     try {
       // 使用 middleware 的 supabase（不依赖 next/headers）
       const hasAccess = await checkAppAccessWithClient(
