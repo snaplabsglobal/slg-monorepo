@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { generateSnapEvidencePresignedUrl } from '@/lib/snap-evidence/r2-storage'
+import type { PhotoUploadRequest, PhotoUploadResponse } from '@/lib/types'
+
+interface RouteContext {
+  params: Promise<{ id: string }>
+}
+
+/**
+ * POST /api/jobs/[id]/photos/upload - Generate presigned URL for direct R2 upload
+ * Body: { filename: string, contentType: string }
+ * Returns: { presignedUrl: string, fileUrl: string, filePath: string }
+ *
+ * CRITICAL: Uses SnapEvidence R2 bucket (dev-slg-media / slg-media)
+ * NOT the receipts bucket
+ */
+export async function POST(request: NextRequest, context: RouteContext) {
+  try {
+    const { id: jobId } = await context.params
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify job exists and get organization_id
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('id, organization_id')
+      .eq('id', jobId)
+      .is('deleted_at', null)
+      .single()
+
+    if (jobError || !job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+    }
+
+    const body: PhotoUploadRequest = await request.json()
+
+    if (!body.filename || !body.contentType) {
+      return NextResponse.json(
+        { error: 'filename and contentType are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate content type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+    if (!allowedTypes.includes(body.contentType)) {
+      return NextResponse.json(
+        { error: 'Invalid content type. Allowed: ' + allowedTypes.join(', ') },
+        { status: 400 }
+      )
+    }
+
+    // Generate photo ID (UUID)
+    const photoId = crypto.randomUUID()
+
+    // Generate presigned URL using SnapEvidence R2 storage
+    // Key format: jobs/{jobId}/evidence/{yyyy}/{mm}/{dd}/{photoId}.jpg
+    const { presignedUrl, fileUrl, filePath, bucket } = await generateSnapEvidencePresignedUrl(
+      jobId,
+      photoId,
+      body.contentType,
+      3600, // 1 hour expiry
+      {
+        'x-amz-meta-job-id': jobId,
+        'x-amz-meta-org-id': job.organization_id,
+        'x-amz-meta-user-id': user.id,
+      }
+    )
+
+    console.log(`[SnapEvidence] Presigned URL generated: bucket=${bucket}, key=${filePath}`)
+
+    const response: PhotoUploadResponse = {
+      presignedUrl,
+      fileUrl,
+      filePath,
+    }
+
+    return NextResponse.json(response)
+  } catch (error) {
+    console.error('Photo upload presign error:', error)
+
+    // Check if it's an R2 configuration error
+    if (error instanceof Error && (
+      error.message.includes('not configured') ||
+      error.message.includes('BUCKET MISMATCH') ||
+      error.message.includes('KEY PREFIX MISMATCH')
+    )) {
+      return NextResponse.json(
+        { error: 'Storage not configured correctly. Please contact support.' },
+        { status: 503 }
+      )
+    }
+
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

@@ -58,7 +58,11 @@ export async function middleware(request: NextRequest) {
   // ============================================
   // 3. 应用级别权限检查（核心逻辑）
   // ============================================
-  if (user && isProtectedPath) {
+  // NOTE: For local development, skip paywall checks
+  // TODO: Re-enable for production when subscription tiers are set up
+  const isDev = process.env.NODE_ENV === 'development'
+
+  if (user && isProtectedPath && !isDev) {
     try {
       // 使用 middleware 的 supabase（不依赖 next/headers）
       const hasAccess = await checkAppAccessWithClient(
@@ -81,12 +85,12 @@ export async function middleware(request: NextRequest) {
       // ============================================
       if (!hasAccess) {
         const userData = await getUserDataSnapshotWithClient(supabase, user.id)
-        
+
         const upgradeUrl = new URL('/upgrade', request.url)
         upgradeUrl.searchParams.set('from', 'paywall')
         upgradeUrl.searchParams.set('app', CURRENT_APP_CODE)
         upgradeUrl.searchParams.set('path', request.nextUrl.pathname)
-        
+
         // 存储用户数据到 session（可选）
         if (userData) {
           upgradeUrl.searchParams.set('data', JSON.stringify(userData))
