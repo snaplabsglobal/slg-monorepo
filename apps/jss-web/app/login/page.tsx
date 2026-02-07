@@ -11,9 +11,9 @@ export default function LoginPage() {
   return (
     <LoginForm
       theme="jss-web"
-      redirectTo="/dashboard"
+      redirectTo="/jobs"
       title="Welcome to JobSite Snap"
-      description="Sign in to manage your job site timecards"
+      description="Sign in to manage your job site photos"
       showRegisterLink={true}
       registerLink="/register"
       appOrigin="JSS"

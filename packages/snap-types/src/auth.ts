@@ -43,11 +43,12 @@ export function getRedirectUrl(
   }
 
   // Regular users based on app origin
+  // Note: Use relative paths to stay on same domain, avoid cross-domain redirects
   switch (appOrigin) {
     case 'LS':
-      return 'https://dev.ledgersnap.app/dashboard'
+      return '/dashboard'
     case 'JSS':
-      return 'https://dev.jobsitesnap.app/dashboard'
+      return '/jobs'
     case 'SLG':
       return '/dashboard'
     default:

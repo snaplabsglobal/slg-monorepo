@@ -10,9 +10,9 @@ export default function RegisterPage() {
   return (
     <RegisterForm
       theme="jss-web"
-      redirectTo="/dashboard"
+      redirectTo="/jobs"
       title="Create Your Account"
-      description="Join JobSite Snap and digitize your timecards"
+      description="Join JobSite Snap and capture job site photos"
       showLoginLink={true}
       loginLink="/login"
     />
