@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
   // 2. 已登录用户访问认证页面
   // ============================================
   if (user && isAuthPath) {
-    return NextResponse.redirect(new URL('/jobs', request.url))
+    return NextResponse.redirect(new URL('/onboarding/check', request.url))
   }
 
   // ============================================
