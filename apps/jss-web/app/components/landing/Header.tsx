@@ -46,6 +46,13 @@ export function Header(props: {
           <LanguageSwitch lang={lang} onChange={onLangChange} variant="desktop" />
 
           <a
+            href="/login"
+            className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+          >
+            Login
+          </a>
+
+          <a
             href="#cta"
             className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
           >
@@ -85,6 +92,14 @@ export function Header(props: {
             <div className="pt-2">
               <LanguageSwitch lang={lang} onChange={onLangChange} variant="mobile" />
             </div>
+
+            <a
+              onClick={() => setOpen(false)}
+              href="/login"
+              className="mt-1 inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700"
+            >
+              Login
+            </a>
 
             <a
               onClick={() => setOpen(false)}
