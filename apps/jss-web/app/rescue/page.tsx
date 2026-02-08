@@ -5,20 +5,22 @@
  *
  * Entry point: /rescue
  *
- * "Rescue your photo library - Get your past under control before starting fresh."
+ * Redirects to the new wizard entry point at /rescue/new
  */
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { RescueWizard } from '@/components/rescue'
 
 export default function RescuePage() {
   const router = useRouter()
 
+  useEffect(() => {
+    router.replace('/rescue/new')
+  }, [router])
+
   return (
-    <RescueWizard
-      onComplete={() => router.push('/dashboard')}
-      onCancel={() => router.push('/')}
-      lang="en"
-    />
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="text-gray-500">Loading rescue mode...</div>
+    </div>
   )
 }

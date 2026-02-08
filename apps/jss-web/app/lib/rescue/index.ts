@@ -11,4 +11,6 @@
 
 export * from './types'
 export * from './clustering'
+export * from './selectors'
+export * from './mock'
 export { useRescueStore } from './store'
