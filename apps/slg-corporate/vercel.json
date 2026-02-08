@@ -3,5 +3,6 @@
   "buildCommand": "cd ../.. && pnpm --filter @slo/snap-auth build && pnpm --filter @slo/snap-types build && cd apps/slg-corporate && pnpm build",
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet ./apps/slg-corporate ./packages/snap-auth ./packages/snap-types"
 }

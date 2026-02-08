@@ -4,10 +4,11 @@
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet ./apps/ls-web ./packages/snap-auth ./packages/snap-types ./packages/shared-utils",
   "crons": [
     {
       "path": "/api/analysis/cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/1 * * * *"
     }
   ]
 }

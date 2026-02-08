@@ -3,5 +3,6 @@
   "buildCommand": "cd ../.. && pnpm --filter @slo/snap-auth build && pnpm --filter @slo/snap-types build && cd apps/jss-web && pnpm build",
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet ./apps/jss-web ./packages/snap-auth ./packages/snap-types"
 }
