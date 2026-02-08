@@ -9,6 +9,12 @@ export type PhotoStatus = 'pending' | 'uploading' | 'uploaded' | 'failed'
 // Photo stage (before/during/after)
 export type PhotoStage = 'before' | 'during' | 'after'
 
+// Photo variant (for multi-version storage)
+// preview: compressed for upload/display
+// original: full resolution (Phase 1.5+)
+// wm: watermarked version (Phase 2)
+export type PhotoVariant = 'preview' | 'original' | 'wm'
+
 /**
  * Photo item metadata stored in IndexedDB
  */
@@ -42,6 +48,11 @@ export interface PhotoItem {
     maxDimension: number        // e.g., 2048
     quality: number             // e.g., 0.75
   }
+
+  // R2 Key规范 (幂等性保护)
+  // MUST be set at capture time and NEVER regenerated
+  variant?: PhotoVariant        // Default: 'preview'
+  r2_key?: string               // Stable key: jobs/{jobId}/photos/{photoId}/preview.jpg
 
   // Display helpers (cached from job)
   job_name?: string

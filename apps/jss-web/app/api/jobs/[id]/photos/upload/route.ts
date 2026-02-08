@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { generateSnapEvidencePresignedUrl } from '@/lib/snap-evidence/r2-storage'
+import {
+  generatePresignedUrlForKey,
+  buildR2Key,
+} from '@/lib/snap-evidence/r2-storage'
 import type { PhotoUploadRequest, PhotoUploadResponse } from '@/lib/types'
 
 interface RouteContext {
@@ -9,7 +12,13 @@ interface RouteContext {
 
 /**
  * POST /api/jobs/[id]/photos/upload - Generate presigned URL for direct R2 upload
- * Body: { filename: string, contentType: string }
+ *
+ * Body (idempotent mode - preferred):
+ *   { photo_id: string, r2_key: string, contentType: string }
+ *
+ * Body (legacy mode):
+ *   { filename: string, contentType: string }
+ *
  * Returns: { presignedUrl: string, fileUrl: string, filePath: string }
  *
  * CRITICAL: Uses SnapEvidence R2 bucket (dev-slg-media / slg-media)
@@ -37,47 +46,68 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    const body: PhotoUploadRequest = await request.json()
+    const body = await request.json() as PhotoUploadRequest & {
+      photo_id?: string
+      r2_key?: string
+    }
 
-    if (!body.filename || !body.contentType) {
+    // Validate content type
+    const contentType = body.contentType
+    if (!contentType) {
       return NextResponse.json(
-        { error: 'filename and contentType are required' },
+        { error: 'contentType is required' },
         { status: 400 }
       )
     }
 
-    // Validate content type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
-    if (!allowedTypes.includes(body.contentType)) {
+    if (!allowedTypes.includes(contentType)) {
       return NextResponse.json(
         { error: 'Invalid content type. Allowed: ' + allowedTypes.join(', ') },
         { status: 400 }
       )
     }
 
-    // Generate photo ID (UUID)
-    const photoId = crypto.randomUUID()
+    // Determine R2 key (idempotent mode vs legacy mode)
+    let r2Key: string
+    let photoId: string
 
-    // Generate presigned URL using SnapEvidence R2 storage
-    // Key format: jobs/{jobId}/evidence/{yyyy}/{mm}/{dd}/{photoId}.jpg
-    const { presignedUrl, fileUrl, filePath, bucket } = await generateSnapEvidencePresignedUrl(
-      jobId,
-      photoId,
-      body.contentType,
+    if (body.r2_key && body.photo_id) {
+      // ✅ Idempotent mode: client provides stable key
+      r2Key = body.r2_key
+      photoId = body.photo_id
+      console.log(`[SnapEvidence] Using client-provided r2_key (idempotent): ${r2Key}`)
+    } else if (body.photo_id) {
+      // Client provides photo_id, server generates key
+      photoId = body.photo_id
+      r2Key = buildR2Key(jobId, photoId, 'preview')
+      console.log(`[SnapEvidence] Generated r2_key from photo_id: ${r2Key}`)
+    } else {
+      // Legacy mode: server generates both (not idempotent on retry)
+      photoId = crypto.randomUUID()
+      r2Key = buildR2Key(jobId, photoId, 'preview')
+      console.log(`[SnapEvidence] Legacy mode - generated new photo_id: ${photoId}`)
+    }
+
+    // Generate presigned URL using stable key
+    const { presignedUrl, fileUrl, bucket } = await generatePresignedUrlForKey(
+      r2Key,
+      contentType,
       3600, // 1 hour expiry
       {
         'x-amz-meta-job-id': jobId,
         'x-amz-meta-org-id': job.organization_id,
         'x-amz-meta-user-id': user.id,
+        'x-amz-meta-photo-id': photoId,
       }
     )
 
-    console.log(`[SnapEvidence] Presigned URL generated: bucket=${bucket}, key=${filePath}`)
+    console.log(`[SnapEvidence] Presigned URL generated: bucket=${bucket}, key=${r2Key}`)
 
     const response: PhotoUploadResponse = {
       presignedUrl,
       fileUrl,
-      filePath,
+      filePath: r2Key,
     }
 
     return NextResponse.json(response)

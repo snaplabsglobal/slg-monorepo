@@ -389,12 +389,14 @@ class UploadQueue {
     blob: Blob,
     item: PhotoItem
   ): Promise<{ file_id: string }> {
-    // 1. Get presigned URL
+    // 1. Get presigned URL (idempotent: use item.r2_key)
     const presignRes = await fetch(`/api/jobs/${item.job_id}/photos/upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        filename: `photo-${item.id}.jpg`,
+        // 🔐 Idempotent mode: pass stable photo_id and r2_key
+        photo_id: item.id,
+        r2_key: item.r2_key,
         contentType: blob.type || 'image/jpeg',
       }),
     })
@@ -427,11 +429,14 @@ class UploadQueue {
       clearTimeout(timeout)
     }
 
-    // 3. Create photo record in database
+    // 3. Create photo record in database (upsert mode for idempotency)
     const createRes = await fetch(`/api/jobs/${item.job_id}/photos`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // 🔐 Include client_photo_id for idempotent upsert
+        client_photo_id: item.id,
+        r2_key: item.r2_key,
         file_url: fileUrl,
         file_size: blob.size,
         mime_type: blob.type || 'image/jpeg',

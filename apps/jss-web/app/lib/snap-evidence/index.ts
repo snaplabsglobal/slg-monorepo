@@ -14,6 +14,7 @@ export type {
   PhotoBlob,
   PhotoStatus,
   PhotoStage,
+  PhotoVariant,
   WatermarkConfig,
 } from './types'
 
@@ -64,7 +65,11 @@ export { syncOrchestrator } from './sync-orchestrator'
 // R2 Storage (dedicated SnapEvidence bucket)
 export {
   generateSnapEvidencePresignedUrl,
+  generatePresignedUrlForKey,
   deleteSnapEvidencePhoto,
   generateEvidenceKey,
   getSnapEvidenceBucketInfo,
+  // R2 Key规范 (幂等性保护)
+  buildR2Key,
+  resolveR2Key,
 } from './r2-storage'

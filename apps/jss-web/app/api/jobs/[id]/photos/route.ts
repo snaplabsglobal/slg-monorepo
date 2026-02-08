@@ -91,6 +91,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
 /**
  * POST /api/jobs/[id]/photos - Create photo record after successful R2 upload
  * Body: CreatePhotoRequest
+ *
+ * Supports idempotent upsert when client_photo_id is provided.
+ * Retry uploads with same client_photo_id will update, not duplicate.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -114,30 +117,64 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    const body: CreatePhotoRequest = await request.json()
+    const body = await request.json() as CreatePhotoRequest & {
+      client_photo_id?: string
+      r2_key?: string
+    }
 
     if (!body.file_url) {
       return NextResponse.json({ error: 'file_url is required' }, { status: 400 })
     }
 
-    const { data: photo, error: insertError } = await supabase
-      .from('job_photos')
-      .insert({
-        job_id: jobId,
-        organization_id: job.organization_id,
-        file_url: body.file_url,
-        taken_at: body.taken_at || new Date().toISOString(),
-        stage: body.stage || null,
-        area: body.area || null,
-        trade: body.trade || null,
-        file_size: body.file_size || null,
-        mime_type: body.mime_type || 'image/jpeg',
-      })
-      .select()
-      .single()
+    const photoData = {
+      job_id: jobId,
+      organization_id: job.organization_id,
+      file_url: body.file_url,
+      taken_at: body.taken_at || new Date().toISOString(),
+      stage: body.stage || null,
+      area: body.area || null,
+      trade: body.trade || null,
+      file_size: body.file_size || null,
+      mime_type: body.mime_type || 'image/jpeg',
+      // Idempotency fields
+      client_photo_id: body.client_photo_id || null,
+      r2_key: body.r2_key || null,
+    }
 
-    if (insertError) {
-      console.error('Error creating photo:', insertError)
+    let photo
+    let dbError
+
+    if (body.client_photo_id) {
+      // 🔐 Idempotent mode: upsert by client_photo_id
+      const result = await supabase
+        .from('job_photos')
+        .upsert(photoData, {
+          onConflict: 'client_photo_id',
+          ignoreDuplicates: false, // Update on conflict
+        })
+        .select()
+        .single()
+
+      photo = result.data
+      dbError = result.error
+
+      if (!dbError) {
+        console.log(`[SnapEvidence] Photo upsert success: client_photo_id=${body.client_photo_id}`)
+      }
+    } else {
+      // Legacy mode: plain insert
+      const result = await supabase
+        .from('job_photos')
+        .insert(photoData)
+        .select()
+        .single()
+
+      photo = result.data
+      dbError = result.error
+    }
+
+    if (dbError) {
+      console.error('Error creating photo:', dbError)
       return NextResponse.json({ error: 'Failed to create photo record' }, { status: 500 })
     }
 

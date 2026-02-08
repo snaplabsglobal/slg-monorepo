@@ -12,6 +12,84 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import type { PhotoVariant, PhotoItem } from './types'
+
+// ============================================================================
+// R2 Key规范 - 幂等性保护
+// ============================================================================
+
+/**
+ * Build stable R2 object key for a photo item + variant.
+ * MUST be called once at capture/save time and reused forever.
+ *
+ * Key format: jobs/{jobId}/photos/{photoId}/{variant}.jpg
+ *
+ * @param jobId - Owner job UUID
+ * @param photoId - Photo UUID (= PhotoItem.id)
+ * @param variant - Photo variant (preview/original/wm)
+ * @returns Stable R2 object key
+ *
+ * @example
+ * buildR2Key("job-123", "photo-456", "preview")
+ * // => "jobs/job-123/photos/photo-456/preview.jpg"
+ */
+export function buildR2Key(
+  jobId: string,
+  photoId: string,
+  variant: PhotoVariant = 'preview'
+): string {
+  const base = `jobs/${jobId}/photos/${photoId}`
+
+  switch (variant) {
+    case 'preview':
+      return `${base}/preview.jpg`
+    case 'original':
+      return `${base}/original.jpg`
+    case 'wm':
+      return `${base}/wm.jpg`
+    default:
+      return `${base}/preview.jpg`
+  }
+}
+
+/**
+ * Build legacy R2 key for old photos (compatibility only).
+ * DO NOT use for new photos.
+ */
+function buildLegacyR2Key(
+  jobId: string,
+  photoId: string,
+  takenAtISO: string
+): string {
+  const d = new Date(takenAtISO)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+
+  return `jobs/${jobId}/evidence/${yyyy}/${mm}/${dd}/${photoId}.jpg`
+}
+
+/**
+ * Resolve R2 key for a photo item (supports legacy format).
+ * New photos: use r2_key field
+ * Old photos: fallback to legacy key format
+ *
+ * @param item - PhotoItem
+ * @returns R2 object key
+ */
+export function resolveR2Key(item: PhotoItem): string {
+  // New photos: have r2_key set at capture time
+  if (item.r2_key) {
+    return item.r2_key
+  }
+
+  // Old photos: fallback to legacy format
+  return buildLegacyR2Key(item.job_id, item.id, item.taken_at)
+}
+
+// ============================================================================
+// R2 Configuration
+// ============================================================================
 
 // Expected bucket names - hard-coded for validation
 const EXPECTED_BUCKETS = {
@@ -215,6 +293,54 @@ export async function generateSnapEvidencePresignedUrl(
     presignedUrl,
     fileUrl,
     filePath,
+    bucket: bucketName,
+  }
+}
+
+/**
+ * Generate presigned URL for a specific R2 key (idempotent).
+ * Use this when client provides the stable r2_key.
+ *
+ * @param r2Key - Stable R2 object key from client (e.g., jobs/{jobId}/photos/{photoId}/preview.jpg)
+ * @param contentType - MIME type
+ * @param expiresIn - URL expiry in seconds
+ * @param metadata - Optional metadata
+ */
+export async function generatePresignedUrlForKey(
+  r2Key: string,
+  contentType: string,
+  expiresIn: number = 3600,
+  metadata?: Record<string, string>
+): Promise<{
+  presignedUrl: string
+  fileUrl: string
+  r2Key: string
+  bucket: string
+}> {
+  const { client, bucketName, publicUrl } = createSnapEvidenceClient()
+
+  // Validate key format
+  assertValidUpload(bucketName, r2Key)
+
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: r2Key,
+    ContentType: contentType,
+    Metadata: {
+      ...metadata,
+      'x-snap-evidence-version': 'v2',
+    },
+  })
+
+  const presignedUrl = await getSignedUrl(client, command, { expiresIn })
+  const fileUrl = `${publicUrl}/${r2Key}`
+
+  console.log(`[SnapEvidence] Presigned URL for stable key: bucket=${bucketName}, key=${r2Key}`)
+
+  return {
+    presignedUrl,
+    fileUrl,
+    r2Key,
     bucket: bucketName,
   }
 }

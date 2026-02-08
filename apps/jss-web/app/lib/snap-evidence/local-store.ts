@@ -7,6 +7,7 @@
 
 import type { PhotoItem, PhotoBlob, PhotoStatus } from './types'
 import { STORAGE_TTL_CONFIG } from './types'
+import { buildR2Key } from './r2-storage'
 
 const DB_NAME = 'jobsite_snap'
 const DB_VERSION = 1
@@ -79,6 +80,9 @@ export async function savePhoto(
   const id = generateUUID()
   const now = new Date().toISOString()
 
+  // 🔐 Lock r2_key at capture time - NEVER regenerate on retry
+  const r2_key = buildR2Key(jobId, id, 'preview')
+
   const item: PhotoItem = {
     id,
     job_id: jobId,
@@ -90,6 +94,9 @@ export async function savePhoto(
     attempts: 0,
     mime_type: blob.type || 'image/jpeg',
     byte_size: blob.size,
+    // R2 Key规范 (幂等性保护)
+    variant: 'preview',
+    r2_key,
     job_name: options.jobName,
     location: options.location,
   }
