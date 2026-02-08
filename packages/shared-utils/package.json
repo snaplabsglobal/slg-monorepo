@@ -1,13 +1,16 @@
 {
   "name": "@slo/shared-utils",
   "version": "1.0.0",
-  "description": "Shared utils (receipt status, etc.) for LS/JSS",
+  "description": "Shared utils (receipt status, financial, display) for LS/JSS",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slo/snap-types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
