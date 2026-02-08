@@ -97,3 +97,10 @@ html {
   background-color: var(--ls-primary);
   color: var(--ls-white);
 }
+
+/* Safe area utilities for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
