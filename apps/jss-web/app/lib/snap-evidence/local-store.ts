@@ -6,6 +6,7 @@
  */
 
 import type { PhotoItem, PhotoBlob, PhotoStatus } from './types'
+import { STORAGE_TTL_CONFIG } from './types'
 
 const DB_NAME = 'jobsite_snap'
 const DB_VERSION = 1
@@ -194,7 +195,18 @@ export async function getPhotosByStatus(status: PhotoStatus, limit?: number): Pr
 export async function updatePhotoStatus(
   id: string,
   status: PhotoStatus,
-  extra?: Partial<Pick<PhotoItem, 'attempts' | 'last_error' | 'uploaded_at' | 'server_file_id' | 'watermark_version'>>
+  extra?: Partial<Pick<PhotoItem,
+    | 'attempts'
+    | 'last_error'
+    | 'uploaded_at'
+    | 'server_file_id'
+    | 'watermark_version'
+    // Phase 1.5: Compression metadata
+    | 'original_hash'
+    | 'original_size'
+    | 'compressed_size'
+    | 'compression_params'
+  >>
 ): Promise<PhotoItem | undefined> {
   const db = await getDB()
   const item = await getPhotoItem(id)
@@ -395,4 +407,147 @@ export async function saveThumbnail(id: string, thumbnail: Blob): Promise<void> 
     request.onerror = () => reject(request.error)
     request.onsuccess = () => resolve()
   })
+}
+
+/**
+ * Set expiry date on photo blob (called after successful upload)
+ * Phase 1.5: Original images expire 7 days after upload
+ */
+export async function setPhotoBlobExpiry(id: string): Promise<void> {
+  const db = await getDB()
+  const existing = await getPhotoBlob(id)
+
+  if (!existing) return
+
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + STORAGE_TTL_CONFIG.originalRetentionDays)
+
+  const updated: PhotoBlob = {
+    ...existing,
+    expires_at: expiresAt.toISOString(),
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BLOBS, 'readwrite')
+    const request = tx.objectStore(STORE_BLOBS).put(updated)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve()
+  })
+}
+
+/**
+ * Clean up expired original blobs
+ * Phase 1.5: Deletes original blobs that have passed their 7-day TTL
+ * Keeps the photo item metadata for reference
+ */
+export async function cleanupExpiredOriginals(): Promise<number> {
+  const db = await getDB()
+  const now = new Date()
+  let cleanedCount = 0
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_ITEMS, STORE_BLOBS], 'readwrite')
+    const blobStore = tx.objectStore(STORE_BLOBS)
+    const cursorRequest = blobStore.openCursor()
+
+    tx.onerror = () => reject(tx.error)
+    tx.oncomplete = () => {
+      if (cleanedCount > 0) {
+        console.log(`[Cleanup] Removed ${cleanedCount} expired original blobs`)
+      }
+      resolve(cleanedCount)
+    }
+
+    cursorRequest.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result
+      if (cursor) {
+        const blobRecord = cursor.value as PhotoBlob
+
+        // Check if blob has expiry and is expired
+        if (blobRecord.expires_at) {
+          const expiresAt = new Date(blobRecord.expires_at)
+          if (expiresAt < now) {
+            // Delete the blob record (keeps PhotoItem for metadata)
+            cursor.delete()
+            cleanedCount++
+          }
+        }
+
+        cursor.continue()
+      }
+    }
+  })
+}
+
+/**
+ * Get storage statistics
+ * Returns total size of blobs in IndexedDB
+ */
+export async function getStorageStats(): Promise<{
+  totalBlobs: number
+  totalSize: number
+  expiredCount: number
+  pendingCleanupSize: number
+}> {
+  const db = await getDB()
+  const now = new Date()
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BLOBS, 'readonly')
+    const store = tx.objectStore(STORE_BLOBS)
+    const request = store.getAll()
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const blobs = request.result as PhotoBlob[]
+      let totalSize = 0
+      let expiredCount = 0
+      let pendingCleanupSize = 0
+
+      for (const blob of blobs) {
+        const blobSize = blob.blob?.size || 0
+        const thumbSize = blob.thumbnail?.size || 0
+        const compressedSize = blob.compressed?.size || 0
+        const recordSize = blobSize + thumbSize + compressedSize
+
+        totalSize += recordSize
+
+        if (blob.expires_at) {
+          const expiresAt = new Date(blob.expires_at)
+          if (expiresAt < now) {
+            expiredCount++
+            pendingCleanupSize += recordSize
+          }
+        }
+      }
+
+      resolve({
+        totalBlobs: blobs.length,
+        totalSize,
+        expiredCount,
+        pendingCleanupSize,
+      })
+    }
+  })
+}
+
+/**
+ * Initialize cleanup on app startup
+ * Should be called once when the app initializes
+ */
+export async function initStorageCleanup(): Promise<void> {
+  try {
+    // Run cleanup immediately
+    await cleanupExpiredOriginals()
+
+    // Log storage stats
+    const stats = await getStorageStats()
+    console.log(
+      `[Storage] ${stats.totalBlobs} photos, ` +
+      `${(stats.totalSize / 1024 / 1024).toFixed(1)}MB total`
+    )
+  } catch (e) {
+    console.warn('[Storage] Cleanup init failed:', e)
+  }
 }

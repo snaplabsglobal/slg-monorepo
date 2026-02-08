@@ -10,7 +10,7 @@
  */
 
 import { uploadQueue } from './upload-queue'
-import { recoverOrphanedPhotos, getPendingCount } from './local-store'
+import { recoverOrphanedPhotos, getPendingCount, initStorageCleanup } from './local-store'
 
 type TriggerReason =
   | 'network_online'
@@ -48,6 +48,9 @@ class SyncOrchestrator {
 
     // Recover orphaned photos from previous sessions
     await recoverOrphanedPhotos()
+
+    // Phase 1.5: Clean up expired original blobs (7-day TTL)
+    await initStorageCleanup()
 
     // Set up event listeners
     this.setupNetworkListener()

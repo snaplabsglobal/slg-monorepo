@@ -21,7 +21,17 @@ export {
   UPLOAD_CONFIG,
   VALID_TRANSITIONS,
   DEFAULT_WATERMARK_CONFIG,
+  STORAGE_TTL_CONFIG,
 } from './types'
+
+// Compression (Phase 1.5)
+export {
+  compressImage,
+  compressImageOffscreen,
+  needsCompression,
+  COMPRESSION_CONFIG,
+  type CompressionResult,
+} from './compression'
 
 // Local Store
 export {
@@ -38,6 +48,11 @@ export {
   getStatusCounts,
   createThumbnail,
   saveThumbnail,
+  // Phase 1.5: TTL cleanup
+  setPhotoBlobExpiry,
+  cleanupExpiredOriginals,
+  getStorageStats,
+  initStorageCleanup,
 } from './local-store'
 
 // Upload Queue

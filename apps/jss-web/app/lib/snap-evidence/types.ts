@@ -34,6 +34,15 @@ export interface PhotoItem {
   byte_size: number
   watermark_version?: string
 
+  // Compression metadata (Phase 1.5)
+  original_hash?: string        // SHA-256 of original blob
+  original_size?: number        // Original file size in bytes
+  compressed_size?: number      // Compressed file size in bytes
+  compression_params?: {
+    maxDimension: number        // e.g., 2048
+    quality: number             // e.g., 0.75
+  }
+
   // Display helpers (cached from job)
   job_name?: string
   location?: string
@@ -44,8 +53,10 @@ export interface PhotoItem {
  */
 export interface PhotoBlob {
   id: string                    // Same as PhotoItem.id
-  blob: Blob                    // Original or compressed image
+  blob: Blob                    // Original image (for local viewing)
+  compressed?: Blob             // Compressed version (for upload)
   thumbnail?: Blob              // Thumbnail (optional)
+  expires_at?: string           // ISO 8601 - when original can be deleted
 }
 
 /**
@@ -66,6 +77,15 @@ export const UPLOAD_CONFIG = {
   maxRetries: 3,                // Single photo max retries
   retryDelays: [1000, 5000, 30000], // 1s, 5s, 30s
   timeout: 60000                // Single upload timeout: 60s
+}
+
+/**
+ * Storage TTL configuration (Phase 1.5)
+ * Original images are kept locally for 7 days after upload
+ */
+export const STORAGE_TTL_CONFIG = {
+  originalRetentionDays: 7,     // Days to keep original after upload
+  cleanupIntervalMs: 24 * 60 * 60 * 1000,  // Run cleanup daily
 }
 
 /**

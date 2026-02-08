@@ -7,13 +7,16 @@
  */
 
 import type { PhotoItem, PhotoStatus } from './types'
-import { UPLOAD_CONFIG, VALID_TRANSITIONS } from './types'
+import { UPLOAD_CONFIG, VALID_TRANSITIONS, STORAGE_TTL_CONFIG } from './types'
 import {
   getPhotosByStatus,
   getPhotoItem,
   getPhotoBlob,
   updatePhotoStatus,
+  updatePhotoBlob,
+  setPhotoBlobExpiry,
 } from './local-store'
+import { compressImage, COMPRESSION_CONFIG } from './compression'
 
 type UploadProgressCallback = (item: PhotoItem, progress: number) => void
 type UploadCompleteCallback = (item: PhotoItem, success: boolean) => void
@@ -126,6 +129,9 @@ class UploadQueue {
         server_file_id: response.file_id,
       })
 
+      // 5. Set TTL on original blob (7 days from now)
+      await setPhotoBlobExpiry(item.id)
+
       this.onProgress?.(item, 100)
       this.onComplete?.(item, true)
 
@@ -159,29 +165,69 @@ class UploadQueue {
   }
 
   /**
-   * Prepare blob for upload (add watermark if needed)
+   * Prepare blob for upload (compress + watermark)
+   * Phase 1.5: Compress to 2048px / quality 0.75, then add watermark
    */
   private async prepareBlob(item: PhotoItem): Promise<Blob | null> {
     const blobRecord = await getPhotoBlob(item.id)
     if (!blobRecord) return null
 
     const originalBlob = blobRecord.blob
+    let processedBlob = originalBlob
 
-    // Add watermark if not already done
+    // Step 1: Compress if not already done
+    if (!item.original_hash) {
+      try {
+        const compressionResult = await compressImage(originalBlob)
+        processedBlob = compressionResult.blob
+
+        // Update item with compression metadata
+        await updatePhotoStatus(item.id, item.status, {
+          original_hash: compressionResult.originalHash,
+          original_size: compressionResult.originalSize,
+          compressed_size: compressionResult.compressedSize,
+          compression_params: {
+            maxDimension: COMPRESSION_CONFIG.maxDimension,
+            quality: COMPRESSION_CONFIG.quality,
+          },
+        })
+
+        // Store compressed blob and set TTL on original
+        const expiresAt = new Date()
+        expiresAt.setDate(expiresAt.getDate() + STORAGE_TTL_CONFIG.originalRetentionDays)
+
+        await updatePhotoBlob(item.id, originalBlob, blobRecord.thumbnail)
+        // Note: We keep originalBlob in IndexedDB, upload the compressed version
+
+        console.log(
+          `[Upload] Compressed ${item.id}: ` +
+          `${(compressionResult.originalSize / 1024).toFixed(0)}KB → ` +
+          `${(compressionResult.compressedSize / 1024).toFixed(0)}KB`
+        )
+      } catch (e) {
+        console.warn('Compression failed, using original:', e)
+        // Continue with original blob
+      }
+    } else if (blobRecord.compressed) {
+      // Use previously compressed version
+      processedBlob = blobRecord.compressed
+    }
+
+    // Step 2: Add watermark if not already done
     if (!item.watermark_version) {
       try {
-        const watermarkedBlob = await this.addWatermark(originalBlob, item)
+        const watermarkedBlob = await this.addWatermark(processedBlob, item)
         await updatePhotoStatus(item.id, item.status, {
           watermark_version: 'v1',
         })
         return watermarkedBlob
       } catch (e) {
-        console.warn('Watermark failed, using original:', e)
-        return originalBlob
+        console.warn('Watermark failed, using compressed:', e)
+        return processedBlob
       }
     }
 
-    return originalBlob
+    return processedBlob
   }
 
   /**
@@ -279,6 +325,8 @@ class UploadQueue {
           y -= fontSize * 1.4
         }
 
+        // Use 0.92 quality to minimize re-compression artifacts
+        // since input is already compressed at 0.75
         canvas.toBlob(
           (watermarkedBlob) => {
             if (watermarkedBlob) {
@@ -288,7 +336,7 @@ class UploadQueue {
             }
           },
           'image/jpeg',
-          0.9
+          0.92
         )
       }
 
