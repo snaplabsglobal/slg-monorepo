@@ -1,127 +1,133 @@
 import type { Copy } from "./copy.types";
 
+/**
+ * Official Marketing Copy (English)
+ *
+ * Source: 260207_JSS销售话术与营销完整方案_CompanyCam差异化定位.md
+ *
+ * Core positioning:
+ * "CompanyCam tries to be helpful by being automatic.
+ *  JSS tries to be trustworthy by being explicit."
+ */
 export const copyEn: Copy = {
   hero: {
-    h1: "The jobsite camera that works when everything else doesn't.",
-    h2: "Built for basements, bad signal, and real job sites — not offices with Wi-Fi.",
-    value: "No signal? Still counts.\nShot taken = evidence saved.",
-    stance: "Most apps assume you have internet. JSS assumes you don't.",
+    h1: "Jobsite photos you can trust—even when everything goes wrong.",
+    h2: "Offline-first jobsite documentation. Suggestions only. Nothing moves unless you approve.",
+    value: "Offline-first · Suggestions only\nNothing moves unless you approve",
+    stance: "Most jobsite photo apps focus on convenience. JSS focuses on control.",
     bullets: [
       {
         title: "Offline-first by design",
-        desc: "Photos are saved locally first. Upload never blocks the shot."
+        desc: "Photos are written locally first. Uploads run in the background. Your camera never blocks."
       },
       {
-        title: "Camera-grade reliability",
-        desc: "If it's written to the device, it's real. Period."
+        title: "Suggestions only",
+        desc: "Nothing is applied without confirmation. Every change is reviewable and reversible."
       },
       {
-        title: "No silent automation",
-        desc: "We don't move, rename, or reassign your photos without you."
+        title: "Company owns the photos",
+        desc: "Staff capture; owners control. Access revokes instantly when someone leaves."
       }
     ],
-    cta: "Try it where Wi-Fi dies"
+    cta: "Try Self-Rescue"
   },
 
   basement: {
-    h2: "Basement. No signal. Still counts.",
+    h2: "Job sites don't have perfect signal. Your camera shouldn't depend on it.",
     body: [
-      "You're in a basement. Concrete walls. No bars. No Wi-Fi.",
-      "You take photos because you have to — progress, changes, proof.",
-      "With most apps, this is where things get risky.",
-      "With JSS, this is where it just works."
+      "Basements drop signal. Concrete kills reception. Inspections don't wait.",
+      "JSS writes every photo locally first. Uploads run in the background. Your camera never blocks."
     ],
     compare: {
-      other: "Other apps: You hope it saved.",
-      jss: "JSS: The shot already counts."
+      other: "Other apps: Photos are queued for upload. When sync breaks, you don't know what was saved.",
+      jss: "JSS: The shot already counts. Upload failure is a state — not a loss."
     },
-    anchor: "If it's written to the device, it's evidence — even underground."
+    anchor: "If the signal dies, your evidence doesn't."
   },
 
   failures: {
-    title: "When photos fail, it's never obvious. Until it's too late.",
+    title: "Where jobsite photo tools usually fail",
     cases: [
       {
-        title: "Upload stuck",
-        subtitle: "You thought it synced. It didn't.",
+        title: "Uploads get stuck",
+        subtitle: "You took the photos. You assumed they synced. They didn't.",
         reason: [
-          "Photos tied to upload",
-          "Retry queues get stuck",
+          "Photos tied to upload queue",
+          "Retry failures go unnoticed",
           "No clear failure signal"
         ],
-        jss: "JSS saves first. Upload failure is a state — not a loss."
+        jss: "JSS writes locally first. Upload never blocks capture."
       },
       {
-        title: "Wrong project",
-        subtitle: "The system 'helped' — and guessed wrong.",
+        title: "History reorganizes itself",
+        subtitle: "Photos move automatically. You notice months later. Now nothing lines up.",
         reason: [
-          "Silent auto-archiving",
-          "No explicit confirmation",
-          "One mistake breaks trust"
+          "Silent auto-organization",
+          "Changes happen continuously",
+          "Fixing mistakes means manual cleanup"
         ],
-        jss: "JSS never auto-assigns in Phase 1. You always confirm."
+        jss: "JSS: Suggestions only. Nothing is applied without confirmation."
       },
       {
-        title: "Lost evidence",
-        subtitle: "Uninstall = gone forever.",
+        title: "Evidence turns into noise",
+        subtitle: "Hundreds of photos. No order. No clear answer for inspectors.",
         reason: [
-          "No system gallery",
-          "Unclear upload state",
-          "False sense of safety"
+          "Great for progress sharing",
+          "Not designed for formal evidence",
+          "No structured delivery"
         ],
-        jss: "JSS clearly shows what's saved and what's not."
+        jss: "JSS: Photos are structured into Evidence Sets. Clear timelines, read-only delivery."
       }
     ],
-    summary: "Failure doesn't happen when you take the photo. It happens when you think you're done."
+    summary: "These aren't edge cases. They're why contractors lose time — and arguments."
   },
 
   smartTrace: {
     h2: "Smart Trace remembers. You decide.",
     body: [
-      "You take photos offline.",
-      "Later, JSS connects the dots — carefully.",
+      "When you take photos offline, JSS remembers location and time.",
+      "Later, it connects the dots — carefully.",
       "Not by guessing. Not by changing anything behind your back.",
       "Just a clear suggestion, waiting for you."
     ],
     uiExample: "Photos taken near: West 41st Ave Project (42m)",
     note: "Nothing happens until you tap.",
-    anchor: "If you didn't decide it, it didn't change."
+    anchor: "In JSS, the system can suggest. Only you can decide."
   },
 
   selfRescue: {
-    h2: "Fix your photo mess — before switching tools",
-    subhead: "Organize years of jobsite photos by location and time. Nothing changes unless you confirm.",
+    h2: "Fix the past — safely",
+    subhead: "Before asking you to trust new photos, JSS helps you clean up the old ones.",
     body: [
-      "Most contractors don't need a new app.",
-      "They need their photos back under control.",
-      "Same building. Multiple units. Quick estimates mixed into real work.",
-      "Self-Rescue Mode lets you clean this up — safely."
+      "Most contractors already have years of jobsite photos — scattered across phones, apps, and folders.",
+      "Self-Rescue Mode helps you organize them by location and time.",
+      "If JSS can't earn your trust with your old photos, it doesn't deserve your new ones."
     ],
     steps: [
       {
-        title: "1. Scan (read-only)",
-        desc: "We read time & location. No changes."
+        title: "Filters personal & travel photos",
+        desc: "We automatically exclude what's clearly not jobsite work."
       },
       {
-        title: "2. Review & fix",
-        desc: "Grouped by building and work sessions. You decide what goes where."
+        title: "Groups likely jobs conservatively",
+        desc: "Suggested groupings based on location. You review everything."
       },
       {
-        title: "3. Confirm",
-        desc: "Apply once. Undo anytime."
+        title: "Never applies changes without review",
+        desc: "You stay in control. Apply once, undo anytime."
       }
     ],
-    trustAnchor: "Suggestions only. Nothing changes unless you confirm.",
-    cta: "Start Self-Rescue"
+    trustAnchor: "Suggestions only. You stay in control.",
+    cta: "Try Self-Rescue"
   },
 
   whySwitch: {
     quotes: [
-      "I stopped worrying if the photo actually saved.",
-      "It doesn't try to be smart behind my back.",
-      "I trust it when things go wrong — not when everything's perfect."
+      "It doesn't surprise me later.",
+      "Inspectors stop asking follow-up questions.",
+      "I finally trust my photo record."
     ],
-    summary: "People don't switch tools because of features. They switch because of trust.",
-    cta: "Try JSS where Wi-Fi dies"
+    summary: "CompanyCam tries to be helpful by being automatic. JSS tries to be trustworthy by being explicit. That's why contractors switch — not for more features, but for fewer surprises.",
+    cta: "Try Self-Rescue"
   }
 };
