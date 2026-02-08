@@ -4,5 +4,5 @@
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet ./apps/slg-corporate ./packages/snap-auth ./packages/snap-types"
+  "ignoreCommand": "cd ../.. && git diff HEAD^ HEAD --quiet apps/slg-corporate packages/snap-auth packages/snap-types"
 }
