@@ -88,6 +88,33 @@ export const copyEn: Copy = {
     anchor: "If you didn't decide it, it didn't change."
   },
 
+  selfRescue: {
+    h2: "Fix your photo mess — before switching tools",
+    subhead: "Organize years of jobsite photos by location and time. Nothing changes unless you confirm.",
+    body: [
+      "Most contractors don't need a new app.",
+      "They need their photos back under control.",
+      "Same building. Multiple units. Quick estimates mixed into real work.",
+      "Self-Rescue Mode lets you clean this up — safely."
+    ],
+    steps: [
+      {
+        title: "1. Scan (read-only)",
+        desc: "We read time & location. No changes."
+      },
+      {
+        title: "2. Review & fix",
+        desc: "Grouped by building and work sessions. You decide what goes where."
+      },
+      {
+        title: "3. Confirm",
+        desc: "Apply once. Undo anytime."
+      }
+    ],
+    trustAnchor: "Suggestions only. Nothing changes unless you confirm.",
+    cta: "Start Self-Rescue"
+  },
+
   whySwitch: {
     quotes: [
       "I stopped worrying if the photo actually saved.",

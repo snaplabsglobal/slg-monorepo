@@ -214,12 +214,81 @@ export default function LandingPage() {
           </div>
         </Section>
 
+        {/* SELF-RESCUE */}
+        <Section
+          id="self-rescue"
+          title={copy.selfRescue.h2}
+          eyebrow="Self-Rescue Mode"
+          className="border-t border-gray-200"
+        >
+          <div className="grid gap-10 md:grid-cols-2">
+            <div className="space-y-4">
+              <p className="text-base font-medium text-gray-800 md:text-lg">
+                {copy.selfRescue.subhead}
+              </p>
+
+              {copy.selfRescue.body.map((p) => (
+                <p key={p} className="text-sm text-gray-700 md:text-base">
+                  {p}
+                </p>
+              ))}
+
+              <div className="mt-6 space-y-3">
+                {copy.selfRescue.steps.map((step) => (
+                  <div key={step.title} className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-sm font-semibold text-gray-900">{step.title}</div>
+                    <div className="mt-1 text-sm text-gray-600">{step.desc}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 text-sm text-gray-500">
+                {copy.selfRescue.trustAnchor}
+              </div>
+
+              <div className="mt-4">
+                <a
+                  href="/rescue/new"
+                  className="inline-flex rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-600"
+                >
+                  {copy.selfRescue.cta} →
+                </a>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-gray-200 bg-white p-6">
+              <div className="text-sm font-semibold text-gray-900">Self-Rescue Preview</div>
+              <div className="mt-2 text-sm text-gray-500">
+                Organize by building and sessions
+              </div>
+              <div className="mt-6 space-y-2">
+                <div className="rounded-xl bg-gray-100 p-3">
+                  <div className="text-xs font-medium text-gray-700">Building 1 – 4500 Kingsway</div>
+                  <div className="mt-1 text-xs text-gray-500">1,240 photos · 12 sessions</div>
+                </div>
+                <div className="rounded-xl bg-gray-100 p-3">
+                  <div className="text-xs font-medium text-gray-700">Building 2 – 2100 Marine Dr</div>
+                  <div className="mt-1 text-xs text-gray-500">890 photos · 8 sessions</div>
+                </div>
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
+                  <div className="text-xs font-medium text-amber-700">Session 10:00–11:30 · Mixed</div>
+                  <div className="mt-1 flex gap-1">
+                    <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">A</span>
+                    <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">B</span>
+                    <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">Fix (5)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Section>
+
         {/* WHY SWITCH */}
         <Section
           id="why-switch"
           title="Why contractors switch"
           eyebrow="Real words"
-          className="border-t border-gray-200"
+          className="border-t border-gray-200 bg-gray-50"
         >
           <div className="grid gap-4 md:grid-cols-3">
             {copy.whySwitch.quotes.map((q) => (

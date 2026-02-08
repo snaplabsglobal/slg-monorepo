@@ -41,6 +41,7 @@ export function Header(props: {
             <a href="#basement" className="hover:text-gray-900">Offline</a>
             <a href="#failures" className="hover:text-gray-900">Reliability</a>
             <a href="#smart-trace" className="hover:text-gray-900">Smart Trace</a>
+            <a href="#self-rescue" className="hover:text-gray-900">Self-Rescue</a>
           </nav>
 
           <LanguageSwitch lang={lang} onChange={onLangChange} variant="desktop" />
@@ -86,6 +87,9 @@ export function Header(props: {
               </a>
               <a onClick={() => setOpen(false)} href="#smart-trace" className="py-1 text-gray-700">
                 Smart Trace
+              </a>
+              <a onClick={() => setOpen(false)} href="#self-rescue" className="py-1 text-gray-700">
+                Self-Rescue
               </a>
             </nav>
 

@@ -32,6 +32,14 @@ export type Copy = {
     note: string;
     anchor: string;
   };
+  selfRescue: {
+    h2: string;
+    subhead: string;
+    body: string[];
+    steps: Array<{ title: string; desc: string }>;
+    trustAnchor: string;
+    cta: string;
+  };
   whySwitch: {
     quotes: string[];
     summary: string;
