@@ -1,10 +1,16 @@
 'use client'
 
 /**
- * Page 2: Scan
+ * Page 2: Scan & Clean
  * Route: /rescue/scan
  *
- * Scan photos and show statistics
+ * Scan photos and show statistics with filtering.
+ * Design principle: Build trust by showing we're reducing noise, not making decisions.
+ *
+ * From product spec:
+ * - Show real, complete date range (Jul 2021 – Aug 2026 format)
+ * - Show filtered vs jobsite photo counts
+ * - "Suggestions only. Nothing has been applied."
  */
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -27,6 +33,15 @@ export default function ScanPage() {
 
   const [scanComplete, setScanComplete] = useState(false)
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
+  const [filteredStats, setFilteredStats] = useState<{
+    jobsitePhotos: number
+    filteredOut: number
+  } | null>(null)
+
+  // Format date as "Jul 2021" or "Aug 2026"
+  const formatMonthYear = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  }
 
   // Simulate scanning with mock data
   const startScan = useCallback(async () => {
@@ -42,7 +57,7 @@ export default function ScanPage() {
     let withGps = 0
     let withoutGps = 0
 
-    // Find date range
+    // Find date range - use real month/year format
     const timestamps = photos
       .filter((p) => p.takenAtUtc)
       .map((p) => new Date(p.takenAtUtc).getTime())
@@ -52,8 +67,8 @@ export default function ScanPage() {
       const startDate = new Date(timestamps[0])
       const endDate = new Date(timestamps[timestamps.length - 1])
       setDateRange({
-        start: startDate.getFullYear().toString(),
-        end: endDate.getFullYear().toString(),
+        start: formatMonthYear(startDate),
+        end: formatMonthYear(endDate),
       })
     }
 
@@ -90,11 +105,24 @@ export default function ScanPage() {
       setUnlocatedPhotoIds(unlocatedBucket.photoIds)
     }
 
-    // Find noise bucket
+    // Find noise bucket (personal/travel photos)
     const noiseBucket = buckets.find((b) => b.bucketId === 'bucket_noise')
     if (noiseBucket) {
       setNoisePhotoIds(noiseBucket.photoIds)
     }
+
+    // Calculate filtered stats
+    // Jobsite = building buckets, Filtered = noise + some unlocated
+    const buildingBuckets = buckets.filter(
+      (b) => b.bucketId !== 'bucket_unlocated' && b.bucketId !== 'bucket_noise'
+    )
+    const jobsitePhotos = buildingBuckets.reduce((sum, b) => sum + b.photoIds.length, 0)
+    const filteredOut = (noiseBucket?.photoIds.length || 0)
+
+    setFilteredStats({
+      jobsitePhotos,
+      filteredOut,
+    })
 
     setIsScanning(false)
     setScanComplete(true)
@@ -126,10 +154,16 @@ export default function ScanPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">
-          {scanComplete ? 'Scan complete' : 'Scanning your photos...'}
+          {scanComplete ? 'Rescue your photo library' : 'Scanning your photos...'}
         </h1>
+        {!scanComplete && (
+          <p className="mt-1 text-sm text-gray-600">
+            Looking for jobsite photos...
+          </p>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -143,36 +177,46 @@ export default function ScanPage() {
         <div className="text-sm text-gray-500">{progress}% complete</div>
       </div>
 
-      {/* Statistics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border p-4">
-          <div className="text-2xl font-semibold">
-            {scanProgress.processed.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-500">Photos found</div>
-        </div>
+      {/* Results card - show after scan complete */}
+      {scanComplete && filteredStats && (
+        <div className="rounded-xl border bg-gray-50 p-6">
+          <div className="text-lg font-medium text-gray-900">We found:</div>
+          <ul className="mt-3 space-y-2 text-gray-700">
+            <li className="flex items-center gap-2">
+              <span className="text-gray-400">•</span>
+              <span className="font-medium">{scanProgress.processed.toLocaleString()}</span> photos total
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-green-500">•</span>
+              <span className="font-medium text-green-700">{filteredStats.jobsitePhotos.toLocaleString()}</span> likely jobsite photos
+            </li>
+            {filteredStats.filteredOut > 0 && (
+              <li className="flex items-center gap-2">
+                <span className="text-gray-400">•</span>
+                <span className="text-gray-500">{filteredStats.filteredOut.toLocaleString()}</span>
+                <span className="text-gray-500">personal or travel photos (excluded)</span>
+              </li>
+            )}
+          </ul>
 
-        <div className="rounded-xl border p-4">
-          <div className="text-2xl font-semibold">
-            {scanProgress.withGps.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-500">With GPS</div>
+          {/* Date range */}
+          {dateRange && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="text-sm text-gray-500">Date range:</div>
+              <div className="font-medium text-gray-900">
+                {dateRange.start} – {dateRange.end}
+              </div>
+            </div>
+          )}
         </div>
+      )}
 
-        <div className="rounded-xl border p-4">
-          <div className="text-2xl font-semibold">
-            {scanProgress.withoutGps.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-500">No location</div>
+      {/* Trust message - critical for user confidence */}
+      {scanComplete && (
+        <div className="text-center text-sm text-gray-500">
+          Suggestions only. Nothing has been applied.
         </div>
-
-        <div className="rounded-xl border p-4">
-          <div className="text-2xl font-semibold">
-            {dateRange ? `${dateRange.start} – ${dateRange.end}` : '—'}
-          </div>
-          <div className="text-sm text-gray-500">Date range</div>
-        </div>
-      </div>
+      )}
 
       {/* Actions */}
       <div className="flex justify-end gap-3 pt-4">
@@ -185,10 +229,10 @@ export default function ScanPage() {
           </button>
         ) : scanComplete ? (
           <button
-            className="rounded-xl bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black"
+            className="rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white hover:bg-black"
             onClick={() => router.push('/rescue/buckets')}
           >
-            Review groups
+            Continue
           </button>
         ) : null}
       </div>

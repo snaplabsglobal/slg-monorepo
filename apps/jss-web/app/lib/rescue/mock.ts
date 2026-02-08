@@ -2,6 +2,11 @@
  * Self-Rescue Mode Mock Data Generator
  *
  * For UI development and performance testing
+ *
+ * Design principle from spec:
+ * - Use real Vancouver-area addresses (GPS→Address format)
+ * - Format: "Burnaby – 8290 Kingsway" not "Example St"
+ * - Span realistic date ranges (multiple years)
  */
 
 import type { BuildingBucket, RescuePhoto, UnitId } from './types'
@@ -29,6 +34,20 @@ type MockOptions = {
   photoIntervalSeconds?: number
 }
 
+// Realistic Vancouver-area jobsite addresses
+const VANCOUVER_ADDRESSES = [
+  { city: 'Burnaby', address: '8290 Kingsway', lat: 49.2276, lng: -122.9931 },
+  { city: 'Vancouver', address: '5862 Cambie St', lat: 49.2270, lng: -123.1162 },
+  { city: 'Richmond', address: '4500 No. 3 Rd', lat: 49.1666, lng: -123.1369 },
+  { city: 'Surrey', address: '10355 King George Blvd', lat: 49.1839, lng: -122.8478 },
+  { city: 'North Vancouver', address: '935 Marine Dr', lat: 49.3130, lng: -123.0784 },
+  { city: 'Coquitlam', address: '2929 Barnet Hwy', lat: 49.2781, lng: -122.7914 },
+  { city: 'New Westminster', address: '800 Columbia St', lat: 49.2057, lng: -122.9110 },
+  { city: 'Vancouver', address: '1055 W Hastings St', lat: 49.2878, lng: -123.1208 },
+  { city: 'Burnaby', address: '4700 Kingsway', lat: 49.2292, lng: -123.0044 },
+  { city: 'Vancouver', address: '2220 Cambie St', lat: 49.2623, lng: -123.1150 },
+]
+
 /**
  * Mulberry32 PRNG for deterministic mock data
  */
@@ -43,6 +62,10 @@ function mulberry32(seed: number) {
 
 function pick<T>(rnd: () => number, arr: T[]): T {
   return arr[Math.floor(rnd() * arr.length)]
+}
+
+function pickIndex(rnd: () => number, length: number): number {
+  return Math.floor(rnd() * length)
 }
 
 function jitter(rnd: () => number, base: number, meters: number) {
@@ -83,17 +106,28 @@ export function generateMockRescueData(opts: MockOptions = {}) {
     { unitId: 'C', label: 'Unit C' },
   ]
 
-  let t0 = '2025-07-23T18:00:00Z'
+  // Start from 2021 for realistic multi-year date range
+  let t0 = '2021-07-15T09:00:00Z'
+
+  // Track used addresses to avoid duplicates
+  const usedAddressIndices: number[] = []
 
   // Generate building buckets
   for (let b = 0; b < buckets; b++) {
-    const baseLat = 49.2 + rnd() * 0.1
-    const baseLng = -123.2 + rnd() * 0.3
+    // Pick a unique address
+    let addrIndex = pickIndex(rnd, VANCOUVER_ADDRESSES.length)
+    while (usedAddressIndices.includes(addrIndex) && usedAddressIndices.length < VANCOUVER_ADDRESSES.length) {
+      addrIndex = (addrIndex + 1) % VANCOUVER_ADDRESSES.length
+    }
+    usedAddressIndices.push(addrIndex)
+
+    const addr = VANCOUVER_ADDRESSES[addrIndex]
+    const baseLat = addr.lat
+    const baseLng = addr.lng
 
     const bucketId = `bucket_building_${b + 1}`
-    const label = `Building ${b + 1} – ${
-      Math.round((1000 + rnd() * 9000) / 10) * 10
-    } Example St`
+    // Format: "Burnaby – 8290 Kingsway" (GPS→Address format from spec)
+    const label = `${addr.city} – ${addr.address}`
 
     const bucketPhotoIds: string[] = []
     const sessions: Array<{
@@ -108,9 +142,12 @@ export function generateMockRescueData(opts: MockOptions = {}) {
       const sessionId = `sess_b${b + 1}_${s + 1}`
       const sessionPhotoIds: string[] = []
 
+      // Add months between buckets, days between sessions for realistic multi-year span
+      const monthsOffset = b * 8  // ~8 months between different job sites
+      const daysOffset = s * 3    // ~3 days between sessions at same site
       const sessionStart = isoAddMinutes(
         t0,
-        (b * sessionsPerBucket + s) * sessionGapMinutes
+        (monthsOffset * 30 * 24 * 60) + (daysOffset * 24 * 60) + (s * sessionGapMinutes)
       )
 
       const isMixed = rnd() < minorityChance
