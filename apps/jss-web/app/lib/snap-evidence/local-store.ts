@@ -5,8 +5,22 @@
  * Core principle: Photos are written locally first, uploaded in background
  */
 
-import type { PhotoItem, PhotoBlob, PhotoStatus } from './types'
-import { STORAGE_TTL_CONFIG } from './types'
+import type {
+  PhotoItem,
+  PhotoBlob,
+  PhotoStatus,
+  CaptureState,
+  UploadState,
+  AssignmentState,
+  TempCoords,
+  SmartTraceMeta,
+} from './types'
+import {
+  STORAGE_TTL_CONFIG,
+  CAPTURE_TRANSITIONS,
+  UPLOAD_TRANSITIONS,
+  ASSIGNMENT_TRANSITIONS,
+} from './types'
 import { buildR2Key } from './r2-storage'
 
 const DB_NAME = 'jobsite_snap'
@@ -64,6 +78,11 @@ function generateUUID(): string {
 /**
  * Save a new photo to local storage
  * This is the fast path - called immediately on shutter click
+ *
+ * Phase 1 Architecture:
+ * - Capture is synchronous and MUST NOT depend on network
+ * - GPS coordinates are captured at this moment (even offline)
+ * - Three orthogonal state machines are initialized
  */
 export async function savePhoto(
   jobId: string,
@@ -74,11 +93,14 @@ export async function savePhoto(
     tradeId?: string
     jobName?: string
     location?: string
+    // GPS coordinates (Smart Trace)
+    tempCoords?: TempCoords
   } = {}
 ): Promise<PhotoItem> {
   const db = await getDB()
   const id = generateUUID()
-  const now = new Date().toISOString()
+  const now = new Date()
+  const nowISO = now.toISOString()
 
   // 🔐 Lock r2_key at capture time - NEVER regenerate on retry
   const r2_key = buildR2Key(jobId, id, 'preview')
@@ -86,14 +108,32 @@ export async function savePhoto(
   const item: PhotoItem = {
     id,
     job_id: jobId,
-    taken_at: now,
+    taken_at: nowISO,
     stage: options.stage || 'during',
     area_id: options.areaId,
     trade_id: options.tradeId,
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // THREE ORTHOGONAL STATE MACHINES (Phase 1 Core)
+    // ═══════════════════════════════════════════════════════════════════════
+    capture_state: 'local_written',  // Photo written = capture SUCCESS
+    upload_state: 'queued',          // Ready for upload queue
+    assignment_state: 'unassigned',  // No Smart Trace yet (requires online)
+
+    // Legacy status (backward compatibility)
     status: 'pending',
     attempts: 0,
+
     mime_type: blob.type || 'image/jpeg',
     byte_size: blob.size,
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GPS COORDINATES (Smart Trace Core Data)
+    // Captured at photo time, even when offline
+    // ═══════════════════════════════════════════════════════════════════════
+    temp_coords: options.tempCoords,
+    timestamp_utc: nowISO,
+
     // R2 Key规范 (幂等性保护)
     variant: 'preview',
     r2_key,
@@ -115,6 +155,11 @@ export async function savePhoto(
     }
 
     tx.oncomplete = () => {
+      console.log(
+        `[SnapEvidence] Photo saved: id=${id.substring(0, 8)}... ` +
+        `GPS=${options.tempCoords ? 'yes' : 'no'} ` +
+        `capture_state=local_written`
+      )
       resolve(item)
     }
 
@@ -197,7 +242,7 @@ export async function getPhotosByStatus(status: PhotoStatus, limit?: number): Pr
 }
 
 /**
- * Update photo item status
+ * Update photo item status (legacy)
  */
 export async function updatePhotoStatus(
   id: string,
@@ -220,8 +265,75 @@ export async function updatePhotoStatus(
 
   if (!item) return undefined
 
+  // Sync legacy status with new upload_state
+  let upload_state: UploadState = item.upload_state
+  if (status === 'pending') upload_state = 'queued'
+  else if (status === 'uploading') upload_state = 'uploading'
+  else if (status === 'uploaded') upload_state = 'uploaded'
+  else if (status === 'failed') upload_state = 'error_retryable'
+
   const updated: PhotoItem = {
     ...item,
+    status,
+    upload_state,
+    ...extra,
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readwrite')
+    const request = tx.objectStore(STORE_ITEMS).put(updated)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(updated)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE MACHINE UPDATE FUNCTIONS (Phase 1 Three Orthogonal Lines)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Validate state transition
+ */
+function canTransition<T extends string>(
+  from: T,
+  to: T,
+  transitions: Record<T, T[]>
+): boolean {
+  return transitions[from]?.includes(to) ?? false
+}
+
+/**
+ * Update upload state (non-blocking to capture)
+ */
+export async function updateUploadState(
+  id: string,
+  newState: UploadState,
+  extra?: Partial<Pick<PhotoItem, 'attempts' | 'last_error' | 'uploaded_at' | 'server_file_id'>>
+): Promise<PhotoItem | undefined> {
+  const db = await getDB()
+  const item = await getPhotoItem(id)
+
+  if (!item) return undefined
+
+  // Validate transition
+  if (!canTransition(item.upload_state, newState, UPLOAD_TRANSITIONS)) {
+    console.warn(
+      `[SnapEvidence] Invalid upload transition: ${item.upload_state} → ${newState}`
+    )
+    return item
+  }
+
+  // Sync with legacy status
+  let status: PhotoStatus = item.status
+  if (newState === 'queued') status = 'pending'
+  else if (newState === 'uploading') status = 'uploading'
+  else if (newState === 'uploaded') status = 'uploaded'
+  else if (newState === 'error_retryable') status = 'failed'
+
+  const updated: PhotoItem = {
+    ...item,
+    upload_state: newState,
     status,
     ...extra,
   }
@@ -232,6 +344,200 @@ export async function updatePhotoStatus(
 
     request.onerror = () => reject(request.error)
     request.onsuccess = () => resolve(updated)
+  })
+}
+
+/**
+ * Update assignment state (Smart Trace)
+ * CRITICAL: This function can ONLY set suggestion, not job_id
+ */
+export async function updateAssignmentState(
+  id: string,
+  newState: AssignmentState,
+  meta?: SmartTraceMeta
+): Promise<PhotoItem | undefined> {
+  const db = await getDB()
+  const item = await getPhotoItem(id)
+
+  if (!item) return undefined
+
+  // Validate transition
+  if (!canTransition(item.assignment_state, newState, ASSIGNMENT_TRANSITIONS)) {
+    console.warn(
+      `[SnapEvidence] Invalid assignment transition: ${item.assignment_state} → ${newState}`
+    )
+    return item
+  }
+
+  const updated: PhotoItem = {
+    ...item,
+    assignment_state: newState,
+  }
+
+  // Only add smart_trace_meta when suggesting
+  if (newState === 'suggested_by_smart_trace' && meta) {
+    updated.smart_trace_meta = meta
+  }
+
+  // Clear suggestion when user ignores/cancels
+  if (newState === 'unassigned') {
+    updated.smart_trace_meta = undefined
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readwrite')
+    const request = tx.objectStore(STORE_ITEMS).put(updated)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      console.log(
+        `[SnapEvidence] Assignment updated: id=${id.substring(0, 8)}... ` +
+        `state=${newState}`
+      )
+      resolve(updated)
+    }
+  })
+}
+
+/**
+ * Confirm Smart Trace suggestion (user action required)
+ * This is the ONLY path to write job_id from Smart Trace
+ */
+export async function confirmSmartTraceSuggestion(
+  id: string,
+  confirmedJobId: string
+): Promise<PhotoItem | undefined> {
+  const db = await getDB()
+  const item = await getPhotoItem(id)
+
+  if (!item) return undefined
+
+  // CRITICAL: Can only confirm from suggested state
+  if (item.assignment_state !== 'suggested_by_smart_trace') {
+    console.error(
+      `[SnapEvidence] Cannot confirm: not in suggested state (current: ${item.assignment_state})`
+    )
+    return item
+  }
+
+  // CRITICAL: Verify the confirmed job_id matches the suggestion
+  if (item.smart_trace_meta?.suggested_job_id !== confirmedJobId) {
+    console.warn(
+      `[SnapEvidence] Confirmed job_id doesn't match suggestion. ` +
+      `Suggested: ${item.smart_trace_meta?.suggested_job_id}, Confirmed: ${confirmedJobId}`
+    )
+    // Still allow - user explicitly confirmed a different job
+  }
+
+  const updated: PhotoItem = {
+    ...item,
+    assignment_state: 'user_confirmed',
+    job_id: confirmedJobId,  // ONLY here can we write job_id from Smart Trace
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readwrite')
+    const request = tx.objectStore(STORE_ITEMS).put(updated)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      console.log(
+        `[SnapEvidence] Smart Trace CONFIRMED: id=${id.substring(0, 8)}... ` +
+        `job_id=${confirmedJobId.substring(0, 8)}...`
+      )
+      resolve(updated)
+    }
+  })
+}
+
+/**
+ * Manually assign photo to a job (user action)
+ */
+export async function manuallyAssignPhoto(
+  id: string,
+  jobId: string,
+  jobName?: string
+): Promise<PhotoItem | undefined> {
+  const db = await getDB()
+  const item = await getPhotoItem(id)
+
+  if (!item) return undefined
+
+  const updated: PhotoItem = {
+    ...item,
+    assignment_state: 'manually_assigned',
+    job_id: jobId,
+    job_name: jobName || item.job_name,
+    // Clear any Smart Trace suggestion
+    smart_trace_meta: undefined,
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readwrite')
+    const request = tx.objectStore(STORE_ITEMS).put(updated)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      console.log(
+        `[SnapEvidence] Manually assigned: id=${id.substring(0, 8)}... ` +
+        `job_id=${jobId.substring(0, 8)}...`
+      )
+      resolve(updated)
+    }
+  })
+}
+
+/**
+ * Get photos pending Smart Trace (for batch processing)
+ * Returns photos that are:
+ * - upload_state = 'uploaded' (already synced)
+ * - assignment_state = 'unassigned'
+ * - temp_coords exists
+ */
+export async function getPhotosForSmartTrace(): Promise<PhotoItem[]> {
+  const db = await getDB()
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readonly')
+    const store = tx.objectStore(STORE_ITEMS)
+    const request = store.getAll()
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const items = request.result as PhotoItem[]
+      const eligible = items.filter(
+        (item) =>
+          item.upload_state === 'uploaded' &&
+          item.assignment_state === 'unassigned' &&
+          item.temp_coords
+      )
+      resolve(eligible)
+    }
+  })
+}
+
+/**
+ * Get photos with pending Smart Trace suggestions
+ * For UI to display "归档建议" prompt
+ */
+export async function getPhotosWithSuggestions(): Promise<PhotoItem[]> {
+  const db = await getDB()
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readonly')
+    const store = tx.objectStore(STORE_ITEMS)
+    const request = store.getAll()
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const items = request.result as PhotoItem[]
+      const withSuggestions = items.filter(
+        (item) =>
+          item.assignment_state === 'suggested_by_smart_trace' &&
+          item.smart_trace_meta
+      )
+      resolve(withSuggestions)
+    }
   })
 }
 

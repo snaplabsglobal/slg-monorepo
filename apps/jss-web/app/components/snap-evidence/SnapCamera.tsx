@@ -11,6 +11,7 @@ import {
   syncOrchestrator,
   type PhotoItem,
   type PhotoStatus,
+  type TempCoords,
 } from '@/lib/snap-evidence'
 
 interface Job {
@@ -107,6 +108,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const gpsWatchIdRef = useRef<number | null>(null)
 
   const [isReady, setIsReady] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -114,6 +116,9 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
   const [thumbnails, setThumbnails] = useState<ThumbnailItem[]>([])
   const [isCapturing, setIsCapturing] = useState(false)
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null)
+  // GPS coordinates for Smart Trace (captured in background)
+  const [currentGps, setCurrentGps] = useState<TempCoords | null>(null)
+  const [gpsStatus, setGpsStatus] = useState<'unknown' | 'acquiring' | 'ready' | 'unavailable'>('unknown')
 
   // Load existing photos for this job
   const loadExistingPhotos = useCallback(async () => {
@@ -195,6 +200,51 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
     setIsReady(false)
   }, [])
 
+  // Start GPS tracking (non-blocking, for Smart Trace)
+  const startGpsTracking = useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      setGpsStatus('unavailable')
+      console.log('[SnapEvidence] Geolocation not available')
+      return
+    }
+
+    setGpsStatus('acquiring')
+
+    // Start watching position
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const coords: TempCoords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy_m: position.coords.accuracy,
+          altitude: position.coords.altitude ?? undefined,
+        }
+        setCurrentGps(coords)
+        setGpsStatus('ready')
+      },
+      (error) => {
+        console.warn('[SnapEvidence] GPS error:', error.message)
+        // Don't set unavailable on timeout, keep trying
+        if (error.code !== error.TIMEOUT) {
+          setGpsStatus('unavailable')
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000, // Allow cached position up to 5 seconds old
+      }
+    )
+  }, [])
+
+  // Stop GPS tracking
+  const stopGpsTracking = useCallback(() => {
+    if (gpsWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current)
+      gpsWatchIdRef.current = null
+    }
+  }, [])
+
   // Fast shutter - captures and saves immediately
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !isReady || isCapturing) return
@@ -224,10 +274,13 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
       })
 
       // 3. Save to local store (fast, <50ms target)
+      // GPS coordinates are passed even if stale - Smart Trace handles accuracy
       const photoItem = await savePhoto(job.id, blob, {
         stage: 'during',
         jobName: job.name,
         location,
+        // Smart Trace: Include GPS coordinates if available
+        tempCoords: currentGps || undefined,
       })
 
       // 4. Create thumbnail in background
@@ -255,7 +308,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
     } finally {
       setIsCapturing(false)
     }
-  }, [isReady, isCapturing, job.id, job.name, location])
+  }, [isReady, isCapturing, job.id, job.name, location, currentGps])
 
   // Handle retry failed upload
   const handleRetry = async (id: string) => {
@@ -281,6 +334,8 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
   useEffect(() => {
     loadExistingPhotos()
     startCamera()
+    // Smart Trace: Start GPS tracking immediately (non-blocking)
+    startGpsTracking()
 
     // Set up upload status listener
     uploadQueue.setCallbacks(
@@ -298,6 +353,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
 
     return () => {
       stopCamera()
+      stopGpsTracking()
       // Cleanup thumbnail URLs
       thumbnails.forEach((t) => URL.revokeObjectURL(t.url))
     }
@@ -381,8 +437,30 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
               <p className="font-semibold text-sm truncate max-w-[200px]">{job.name}</p>
             </div>
 
-            {/* Job switcher placeholder */}
-            <div className="w-10" />
+            {/* GPS Status Indicator (Smart Trace) */}
+            <div className="w-10 flex items-center justify-center">
+              {gpsStatus === 'acquiring' && (
+                <div className="w-5 h-5 text-yellow-400" title="Acquiring GPS...">
+                  <svg className="animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+              )}
+              {gpsStatus === 'ready' && (
+                <div className="w-5 h-5 text-green-400" title={`GPS ready (${currentGps?.accuracy_m?.toFixed(0) || '?'}m)`}>
+                  <svg fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+              )}
+              {gpsStatus === 'unavailable' && (
+                <div className="w-5 h-5 text-gray-500" title="GPS unavailable">
+                  <svg fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -16,6 +16,14 @@ export type {
   PhotoStage,
   PhotoVariant,
   WatermarkConfig,
+  // Phase 1: Three orthogonal state machines
+  CaptureState,
+  UploadState,
+  AssignmentState,
+  // Smart Trace types
+  TempCoords,
+  SmartTraceResult,
+  SmartTraceMeta,
 } from './types'
 
 export {
@@ -23,6 +31,13 @@ export {
   VALID_TRANSITIONS,
   DEFAULT_WATERMARK_CONFIG,
   STORAGE_TTL_CONFIG,
+  // Phase 1: State machine transitions
+  CAPTURE_TRANSITIONS,
+  UPLOAD_TRANSITIONS,
+  ASSIGNMENT_TRANSITIONS,
+  // Smart Trace config
+  SMART_TRACE_CONFIG,
+  SMART_TRACE_CONFIDENCE,
 } from './types'
 
 // Compression (Phase 1.5)
@@ -54,6 +69,13 @@ export {
   cleanupExpiredOriginals,
   getStorageStats,
   initStorageCleanup,
+  // Phase 1: Three orthogonal state machines
+  updateUploadState,
+  updateAssignmentState,
+  confirmSmartTraceSuggestion,
+  manuallyAssignPhoto,
+  getPhotosForSmartTrace,
+  getPhotosWithSuggestions,
 } from './local-store'
 
 // Upload Queue
