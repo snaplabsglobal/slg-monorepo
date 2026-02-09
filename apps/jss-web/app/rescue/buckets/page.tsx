@@ -25,9 +25,10 @@ import type { RescueSummary, RescueBuckets } from '../_mock/rescue.types'
 
 export default function BucketsPage() {
   const router = useRouter()
-  const buckets = useRescueStore((s) => s.buckets)
-  const groupNamingState = useRescueStore((s) => s.groupNamingState)
-  const groupNames = useRescueStore((s) => s.groupNames)
+  // Add fallback for hydration (zustand persist may return undefined before hydration)
+  const buckets = useRescueStore((s) => s.buckets) || []
+  const groupNamingState = useRescueStore((s) => s.groupNamingState) || {}
+  const groupNames = useRescueStore((s) => s.groupNames) || {}
   const setGroupNamingState = useRescueStore((s) => s.setGroupNamingState)
   const setGroupName = useRescueStore((s) => s.setGroupName)
 
@@ -308,7 +309,7 @@ export default function BucketsPage() {
       <div className="space-y-3">
         <BucketCard
           type="unknownLocation"
-          count={missingBuckets.unknownLocation.count}
+          count={missingBuckets?.unknownLocation?.count ?? 0}
           onOpen={() => router.push('/rescue/review/unknownLocation')}
         />
 
