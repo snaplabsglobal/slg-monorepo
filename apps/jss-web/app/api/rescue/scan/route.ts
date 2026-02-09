@@ -94,69 +94,77 @@ type ClusterData = {
 }
 
 export async function POST(req: Request) {
-  // A. requireSessionOrg
-  const auth = await getSessionOrUnauthorized()
-  if (!auth.ok) return auth.response
-
-  const { supabase, organization_id, user_id } = auth.ctx
-
-  // Parse request
-  let body: { scope?: { mode?: string } } = {}
   try {
-    body = await req.json()
-  } catch {
-    // Empty body defaults to unassigned
-  }
+    // A. requireSessionOrg
+    const auth = await getSessionOrUnauthorized()
+    if (!auth.ok) return auth.response
 
-  const scopeMode = body.scope?.mode || 'unassigned'
+    const { supabase, organization_id, user_id } = auth.ctx
 
-  // v1: Only allow 'unassigned' mode
-  if (scopeMode !== 'unassigned') {
-    return NextResponse.json(
-      { error: 'invalid_scope', message: "v1 only supports scope.mode: 'unassigned'" },
-      { status: 400 }
-    )
-  }
+    // Parse request
+    let body: { scope?: { mode?: string } } = {}
+    try {
+      body = await req.json()
+    } catch {
+      // Empty body defaults to unassigned
+    }
 
-  // Generate scan_id
-  const scan_id = generateScanId()
+    const scopeMode = body.scope?.mode || 'unassigned'
 
-  // ============================================================
-  // Query candidate photos
-  // ONLY: job_id IS NULL AND rescue_status = 'unreviewed'
-  // ============================================================
+    // v1: Only allow 'unassigned' mode
+    if (scopeMode !== 'unassigned') {
+      return NextResponse.json(
+        { error: 'invalid_scope', message: "v1 only supports scope.mode: 'unassigned'" },
+        { status: 400 }
+      )
+    }
 
-  const { data: photos, error: queryError } = await supabase
-    .from('job_photos')
-    .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at, ai_classification')
-    .eq('organization_id', organization_id)
-    .is('deleted_at', null)
-    .is('job_id', null)
-    .eq('rescue_status', 'unreviewed')
-    .order('taken_at', { ascending: true, nullsFirst: false })
-    .limit(10000)
+    // Generate scan_id
+    const scan_id = generateScanId()
 
-  if (queryError) {
-    // Try without rescue_status filter (migration may not be applied)
-    const { data: fallbackPhotos, error: fallbackError } = await supabase
+    // ============================================================
+    // Query candidate photos
+    // ONLY: job_id IS NULL AND rescue_status = 'unreviewed'
+    // ============================================================
+
+    const { data: photos, error: queryError } = await supabase
       .from('job_photos')
       .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at, ai_classification')
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
       .is('job_id', null)
+      .eq('rescue_status', 'unreviewed')
       .order('taken_at', { ascending: true, nullsFirst: false })
       .limit(10000)
 
-    if (fallbackError) {
-      return NextResponse.json({ error: 'scan_failed', message: fallbackError.message }, { status: 500 })
+    if (queryError) {
+      // Try without rescue_status filter (migration may not be applied)
+      const { data: fallbackPhotos, error: fallbackError } = await supabase
+        .from('job_photos')
+        .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at, ai_classification')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .is('job_id', null)
+        .order('taken_at', { ascending: true, nullsFirst: false })
+        .limit(10000)
+
+      if (fallbackError) {
+        return NextResponse.json({ error: 'scan_failed', message: fallbackError.message }, { status: 500 })
+      }
+
+      // Ensure we have an array (Supabase returns null when no results)
+      return processAndSave((fallbackPhotos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
     }
 
     // Ensure we have an array (Supabase returns null when no results)
-    return processAndSave((fallbackPhotos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+    return processAndSave((photos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+  } catch (error) {
+    console.error('[rescue/scan] Unhandled error:', error)
+    return NextResponse.json(
+      { error: 'internal_error', message: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    )
   }
-
-  // Ensure we have an array (Supabase returns null when no results)
-  return processAndSave((photos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
 }
 
 async function processAndSave(
