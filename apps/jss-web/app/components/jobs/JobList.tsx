@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useJobs } from '@/lib/hooks'
+import { Archive, Trash2, MoreVertical, Undo } from 'lucide-react'
 import type { Job } from '@/lib/types'
 
 interface CreateJobModalProps {
@@ -94,51 +95,193 @@ function CreateJobModal({ isOpen, onClose, onSubmit, isSubmitting, error }: Crea
 
 interface JobCardProps {
   job: Job
+  onArchive?: (jobId: string) => Promise<void>
+  onUnarchive?: (jobId: string) => Promise<void>
+  onDelete?: (jobId: string) => Promise<void>
 }
 
-function JobCard({ job }: JobCardProps) {
+function JobCard({ job, onArchive, onUnarchive, onDelete }: JobCardProps) {
+  const [showMenu, setShowMenu] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+
   const photoCount = job.photo_count ?? 0
   const lastPhotoDate = job.last_photo_at
     ? new Date(job.last_photo_at).toLocaleDateString()
     : null
 
-  return (
-    <Link
-      href={`/jobs/${job.id}`}
-      className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-[rgb(245,158,11)] transition-all"
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">{job.name}</h3>
-          {job.address && (
-            <p className="text-sm text-gray-500 truncate mt-0.5">{job.address}</p>
-          )}
-        </div>
-        <span className={`
-          ml-2 px-2 py-0.5 text-xs rounded-full
-          ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}
-        `}>
-          {job.status}
-        </span>
-      </div>
+  const handleArchive = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isProcessing || !onArchive) return
+    setIsProcessing(true)
+    try {
+      await onArchive(job.id)
+    } finally {
+      setIsProcessing(false)
+      setShowMenu(false)
+    }
+  }
 
-      <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
-        <span className="flex items-center gap-1">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          {photoCount} photo{photoCount !== 1 ? 's' : ''}
-        </span>
-        {lastPhotoDate && (
+  const handleUnarchive = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isProcessing || !onUnarchive) return
+    setIsProcessing(true)
+    try {
+      await onUnarchive(job.id)
+    } finally {
+      setIsProcessing(false)
+      setShowMenu(false)
+    }
+  }
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isProcessing || !onDelete) return
+    setIsProcessing(true)
+    try {
+      await onDelete(job.id)
+    } finally {
+      setIsProcessing(false)
+      setShowDeleteConfirm(false)
+      setShowMenu(false)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <Link
+        href={`/jobs/${job.id}`}
+        className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-[rgb(245,158,11)] transition-all"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 truncate">{job.name}</h3>
+            {job.address && (
+              <p className="text-sm text-gray-500 truncate mt-0.5">{job.address}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 ml-2">
+            <span className={`
+              px-2 py-0.5 text-xs rounded-full
+              ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}
+            `}>
+              {job.status}
+            </span>
+            {/* Menu button */}
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowMenu(!showMenu)
+              }}
+              className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            {lastPhotoDate}
+            {photoCount} photo{photoCount !== 1 ? 's' : ''}
           </span>
-        )}
-      </div>
-    </Link>
+          {lastPhotoDate && (
+            <span className="flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {lastPhotoDate}
+            </span>
+          )}
+        </div>
+      </Link>
+
+      {/* Dropdown menu */}
+      {showMenu && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowMenu(false)}
+          />
+          {/* Menu */}
+          <div className="absolute right-0 top-12 z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[160px]">
+            {job.status === 'active' ? (
+              <button
+                onClick={handleArchive}
+                disabled={isProcessing}
+                className="w-full flex items-center gap-2 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <Archive className="w-4 h-4" />
+                Archive
+              </button>
+            ) : (
+              <button
+                onClick={handleUnarchive}
+                disabled={isProcessing}
+                className="w-full flex items-center gap-2 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <Undo className="w-4 h-4" />
+                Unarchive
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowDeleteConfirm(true)
+              }}
+              disabled={isProcessing}
+              className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete Job?
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Deleting &quot;{job.name}&quot; will permanently delete all {photoCount} photo{photoCount !== 1 ? 's' : ''}. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isProcessing}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {isProcessing ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -148,7 +291,28 @@ export function JobList() {
   const [createError, setCreateError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  const { jobs, isLoading, isError, createJob, mutate } = useJobs(statusFilter)
+  const { jobs, isLoading, isError, createJob, archiveJob, deleteJob, mutate } = useJobs(statusFilter)
+
+  const handleArchiveJob = async (jobId: string) => {
+    await archiveJob(jobId)
+  }
+
+  const handleUnarchiveJob = async (jobId: string) => {
+    // Unarchive = set status back to active
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' }),
+    })
+    if (!res.ok) {
+      throw new Error('Failed to unarchive job')
+    }
+    mutate()
+  }
+
+  const handleDeleteJob = async (jobId: string) => {
+    await deleteJob(jobId)
+  }
 
   const handleCreateJob = async (name: string, address?: string) => {
     setIsCreating(true)
@@ -244,7 +408,13 @@ export function JobList() {
       {!isLoading && !isError && jobs.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobCard
+              key={job.id}
+              job={job}
+              onArchive={handleArchiveJob}
+              onUnarchive={handleUnarchiveJob}
+              onDelete={handleDeleteJob}
+            />
           ))}
         </div>
       )}

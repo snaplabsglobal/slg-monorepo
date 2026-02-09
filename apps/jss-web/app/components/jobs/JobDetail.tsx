@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePhotos } from '@/lib/hooks'
+import { PhotoViewer } from '@/components/photos/PhotoViewer'
 import type { Job, JobPhoto } from '@/lib/types'
 
 interface PhotoTimelineProps {
@@ -10,7 +11,7 @@ interface PhotoTimelineProps {
 }
 
 function PhotoTimeline({ jobId }: PhotoTimelineProps) {
-  const [selectedPhoto, setSelectedPhoto] = useState<JobPhoto | null>(null)
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
   const {
     photos,
     isLoading,
@@ -18,6 +19,7 @@ function PhotoTimeline({ jobId }: PhotoTimelineProps) {
     isEmpty,
     hasMore,
     loadMore,
+    removePhoto,
   } = usePhotos(jobId)
 
   // Group photos by date
@@ -58,30 +60,34 @@ function PhotoTimeline({ jobId }: PhotoTimelineProps) {
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1 mt-2">
-            {datePhotos.map((photo) => (
-              <button
-                key={photo.id}
-                onClick={() => setSelectedPhoto(photo)}
-                className="aspect-square relative group overflow-hidden rounded-md bg-gray-200"
-              >
-                <img
-                  src={photo.thumbnail_url || photo.file_url}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  loading="lazy"
-                />
-                {photo.stage && (
-                  <span className={`
-                    absolute top-1 left-1 px-1.5 py-0.5 text-[10px] font-medium rounded
-                    ${photo.stage === 'before' ? 'bg-blue-500 text-white' : ''}
-                    ${photo.stage === 'during' ? 'bg-[rgb(245,158,11)] text-white' : ''}
-                    ${photo.stage === 'after' ? 'bg-green-500 text-white' : ''}
-                  `}>
-                    {photo.stage.charAt(0).toUpperCase() + photo.stage.slice(1)}
-                  </span>
-                )}
-              </button>
-            ))}
+            {datePhotos.map((photo) => {
+              // Find global index for this photo
+              const globalIndex = photos.findIndex(p => p.id === photo.id)
+              return (
+                <button
+                  key={photo.id}
+                  onClick={() => setSelectedPhotoIndex(globalIndex)}
+                  className="aspect-square relative group overflow-hidden rounded-md bg-gray-200"
+                >
+                  <img
+                    src={photo.thumbnail_url || photo.file_url}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    loading="lazy"
+                  />
+                  {photo.stage && (
+                    <span className={`
+                      absolute top-1 left-1 px-1.5 py-0.5 text-[10px] font-medium rounded
+                      ${photo.stage === 'before' ? 'bg-blue-500 text-white' : ''}
+                      ${photo.stage === 'during' ? 'bg-[rgb(245,158,11)] text-white' : ''}
+                      ${photo.stage === 'after' ? 'bg-green-500 text-white' : ''}
+                    `}>
+                      {photo.stage.charAt(0).toUpperCase() + photo.stage.slice(1)}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -106,60 +112,24 @@ function PhotoTimeline({ jobId }: PhotoTimelineProps) {
         </div>
       )}
 
-      {/* Photo Viewer Modal */}
-      {selectedPhoto && (
-        <div
-          className="fixed inset-0 bg-black z-50 flex items-center justify-center"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <button
-            onClick={() => setSelectedPhoto(null)}
-            className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-full"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          <img
-            src={selectedPhoto.file_url}
-            alt=""
-            className="max-w-full max-h-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-80">
-                  {new Date(selectedPhoto.taken_at).toLocaleString()}
-                </p>
-                <div className="flex gap-2 mt-1">
-                  {selectedPhoto.stage && (
-                    <span className={`
-                      px-2 py-0.5 text-xs rounded
-                      ${selectedPhoto.stage === 'before' ? 'bg-blue-500' : ''}
-                      ${selectedPhoto.stage === 'during' ? 'bg-[rgb(245,158,11)]' : ''}
-                      ${selectedPhoto.stage === 'after' ? 'bg-green-500' : ''}
-                    `}>
-                      {selectedPhoto.stage}
-                    </span>
-                  )}
-                  {selectedPhoto.area && (
-                    <span className="px-2 py-0.5 text-xs rounded bg-gray-600">
-                      {selectedPhoto.area}
-                    </span>
-                  )}
-                  {selectedPhoto.trade && (
-                    <span className="px-2 py-0.5 text-xs rounded bg-gray-600">
-                      {selectedPhoto.trade}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Photo Viewer with swipe and arrow navigation */}
+      {selectedPhotoIndex !== null && (
+        <PhotoViewer
+          photos={photos}
+          initialIndex={selectedPhotoIndex}
+          onClose={() => setSelectedPhotoIndex(null)}
+          onDelete={async (photoId) => {
+            // Call API to delete photo
+            const res = await fetch(`/api/jobs/${jobId}/photos/${photoId}`, {
+              method: 'DELETE',
+            })
+            if (!res.ok) {
+              throw new Error('Failed to delete photo')
+            }
+            // Optimistic update
+            removePhoto(photoId)
+          }}
+        />
       )}
     </div>
   )

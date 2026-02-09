@@ -13,6 +13,8 @@ import {
   type PhotoStatus,
   type TempCoords,
 } from '@/lib/snap-evidence'
+import { useRecentJobs } from '@/lib/hooks'
+import { JobContextBar } from './JobContextBar'
 
 interface Job {
   id: string
@@ -22,6 +24,7 @@ interface Job {
 
 interface SnapCameraProps {
   job: Job
+  recentJobs?: Job[]
   location?: string
 }
 
@@ -102,13 +105,28 @@ function ThumbnailStrip({
 /**
  * SnapEvidence Camera Component
  * Optimized for fast capture, offline-first, with visible upload status
+ *
+ * Spec: 260207_JSS_Camera页面改进与实时照片显示完整方案.md
+ *
+ * Key behaviors:
+ * - Camera NOT full screen - shows Job Context Bar
+ * - Can switch between recent jobs without leaving camera
+ * - Switching job does not reset camera or interrupt flow
+ * - Non-blocking capture (no confirmation, no modal)
  */
-export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps) {
+export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, location = 'Vancouver, BC' }: SnapCameraProps) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gpsWatchIdRef = useRef<number | null>(null)
+
+  // Current job state (can be switched without leaving camera)
+  const [currentJob, setCurrentJob] = useState<Job>(initialJob)
+
+  // Fetch recent jobs for switching (if not provided)
+  const { recentJobs: fetchedRecentJobs, isLoading: isLoadingJobs } = useRecentJobs()
+  const recentJobs = initialRecentJobs ?? fetchedRecentJobs
 
   const [isReady, setIsReady] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -120,10 +138,17 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
   const [currentGps, setCurrentGps] = useState<TempCoords | null>(null)
   const [gpsStatus, setGpsStatus] = useState<'unknown' | 'acquiring' | 'ready' | 'unavailable'>('unknown')
 
-  // Load existing photos for this job
-  const loadExistingPhotos = useCallback(async () => {
+  // Handle job switch (does NOT reset camera)
+  const handleJobSwitch = useCallback((newJob: Job) => {
+    setCurrentJob(newJob)
+    // Load photos for new job
+    loadPhotosForJob(newJob.id)
+  }, [])
+
+  // Load photos for a specific job
+  const loadPhotosForJob = useCallback(async (jobId: string) => {
     try {
-      const photos = await getPhotosByJob(job.id)
+      const photos = await getPhotosByJob(jobId)
       const items: ThumbnailItem[] = []
 
       for (const photo of photos.slice(0, 20)) {
@@ -144,7 +169,12 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
     } catch (e) {
       console.error('Failed to load existing photos:', e)
     }
-  }, [job.id])
+  }, [])
+
+  // Load existing photos for current job
+  const loadExistingPhotos = useCallback(async () => {
+    await loadPhotosForJob(currentJob.id)
+  }, [currentJob.id, loadPhotosForJob])
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -275,9 +305,9 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
 
       // 3. Save to local store (fast, <50ms target)
       // GPS coordinates are passed even if stale - Smart Trace handles accuracy
-      const photoItem = await savePhoto(job.id, blob, {
+      const photoItem = await savePhoto(currentJob.id, blob, {
         stage: 'during',
-        jobName: job.name,
+        jobName: currentJob.name,
         location,
         // Smart Trace: Include GPS coordinates if available
         tempCoords: currentGps || undefined,
@@ -308,7 +338,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
     } finally {
       setIsCapturing(false)
     }
-  }, [isReady, isCapturing, job.id, job.name, location, currentGps])
+  }, [isReady, isCapturing, currentJob.id, currentJob.name, location, currentGps])
 
   // Handle retry failed upload
   const handleRetry = async (id: string) => {
@@ -327,7 +357,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
   // Close camera and go back
   const handleClose = () => {
     stopCamera()
-    router.push(`/jobs/${job.id}`)
+    router.push(`/jobs/${currentJob.id}`)
   }
 
   // Initialize on mount
@@ -420,25 +450,29 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Top overlay - Job info */}
+        {/* Top overlay - Job Context Bar */}
         <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/70 to-transparent">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
+            {/* Close button */}
             <button
               onClick={handleClose}
-              className="p-2 text-white hover:bg-white/10 rounded-full"
+              className="p-2 text-white hover:bg-white/10 rounded-full flex-shrink-0"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            <div className="text-center text-white">
-              <p className="text-xs opacity-80">Capturing for</p>
-              <p className="font-semibold text-sm truncate max-w-[200px]">{job.name}</p>
-            </div>
+            {/* Job Context Bar - switchable jobs without leaving camera */}
+            <JobContextBar
+              currentJob={currentJob}
+              recentJobs={recentJobs}
+              onJobSelect={handleJobSwitch}
+              isLoading={isLoadingJobs}
+            />
 
             {/* GPS Status Indicator (Smart Trace) */}
-            <div className="w-10 flex items-center justify-center">
+            <div className="w-10 flex items-center justify-center flex-shrink-0">
               {gpsStatus === 'acquiring' && (
                 <div className="w-5 h-5 text-yellow-400" title="Acquiring GPS...">
                   <svg className="animate-pulse" fill="currentColor" viewBox="0 0 24 24">
@@ -502,7 +536,7 @@ export function SnapCamera({ job, location = 'Vancouver, BC' }: SnapCameraProps)
 
           {/* Right: View photos */}
           <button
-            onClick={() => router.push(`/jobs/${job.id}`)}
+            onClick={() => router.push(`/jobs/${currentJob.id}`)}
             className="w-12 h-12 flex items-center justify-center text-white/70 hover:text-white"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

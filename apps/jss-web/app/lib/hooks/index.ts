@@ -1,2 +1,2 @@
-export { useJobs, useJob } from './useJobs'
+export { useJobs, useJob, useRecentJobs } from './useJobs'
 export { usePhotos } from './usePhotos'
