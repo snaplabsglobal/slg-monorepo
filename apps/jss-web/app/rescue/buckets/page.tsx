@@ -9,12 +9,19 @@
  * - No session, no unit, no hour display
  * - Simple: [✓ One job] [Rename] [Skip for now]
  * - Mobile-first: single column, no horizontal scroll
+ *
+ * UI Fix (260208): Added coverage stats and missing-data buckets
+ * to prevent "瞎编" scenarios where only 3 job suggestions
+ * appear out of 1000+ photos without explanation.
  */
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRescueStore } from '@/lib/rescue'
 import { NamingState } from '@/lib/rescue/types'
+import { RescueSummaryCard } from '../_components/RescueSummaryCard'
+import { BucketCard } from '../_components/BucketCard'
+import type { RescueSummary, RescueBuckets } from '../_mock/rescue.types'
 
 export default function BucketsPage() {
   const router = useRouter()
@@ -32,6 +39,55 @@ export default function BucketsPage() {
     (b) => b.bucketId !== 'bucket_unlocated' && b.bucketId !== 'bucket_noise'
   )
   const unlocatedBucket = buckets.find((b) => b.bucketId === 'bucket_unlocated')
+
+  // Compute coverage summary from store data
+  const summary: RescueSummary = useMemo(() => {
+    const totalPhotos = buckets.reduce((sum, b) => sum + b.photoIds.length, 0)
+    const unlocatedCount = unlocatedBucket?.photoIds.length ?? 0
+    const withGps = totalPhotos - unlocatedCount
+    // For now, assume all GPS photos have resolved addresses (can be improved with real data)
+    const addressResolved = jobBuckets.reduce((sum, b) => sum + b.photoIds.length, 0)
+
+    // Extract date range from all sessions
+    const allDates: string[] = []
+    buckets.forEach((b) => {
+      b.sessions.forEach((s) => {
+        if (s.dateRange?.start) allDates.push(s.dateRange.start)
+        if (s.dateRange?.end) allDates.push(s.dateRange.end)
+      })
+    })
+    allDates.sort()
+    const takenAtRange =
+      allDates.length >= 2
+        ? { min: allDates[0], max: allDates[allDates.length - 1] }
+        : undefined
+
+    return {
+      totalPhotos,
+      likelyJobsite: totalPhotos, // Can be refined with personal detection
+      withTakenAt: totalPhotos, // Placeholder - real data would come from backend
+      missingTakenAt: 0,
+      takenAtRange,
+      withGps,
+      addressResolved,
+      addressLookupFailed: withGps - addressResolved,
+      scanComplete: true,
+      analysisState: 'partial' as const,
+      analysisCoverage: { done: addressResolved, total: totalPhotos },
+    }
+  }, [buckets, jobBuckets, unlocatedBucket])
+
+  // Compute missing-data buckets
+  const missingBuckets: RescueBuckets = useMemo(() => {
+    const unlocatedCount = unlocatedBucket?.photoIds.length ?? 0
+    return {
+      unknownLocation: { count: unlocatedCount },
+      geocodeFailed: { count: summary.addressLookupFailed ?? 0 },
+      lowAccuracy: { count: 0 },
+      likelyPersonal: { count: 0 },
+      unsure: { count: 0 },
+    }
+  }, [unlocatedBucket, summary])
 
   // Format date range as "Jul–Aug 2025" or "Feb–Apr 2024"
   const formatDateRange = (bucket: (typeof buckets)[0]) => {
@@ -109,16 +165,25 @@ export default function BucketsPage() {
       <div>
         <h1 className="text-xl font-semibold">Review suggested jobs</h1>
         <p className="mt-1 text-sm text-gray-600">
-          We'll only suggest which photos belong to the same job.
+          We&apos;ll only suggest which photos belong to the same job.
           <br />
-          You'll review everything before anything is saved.
+          You&apos;ll review everything before anything is saved.
         </p>
       </div>
 
-      {/* Progress indicator */}
+      {/* Coverage Summary Card */}
+      {summary.totalPhotos > 0 && <RescueSummaryCard data={summary} />}
+
+      {/* Progress indicator - shows how suggestions were derived */}
       {jobBuckets.length > 0 && (
         <div className="text-sm text-gray-500">
-          {confirmedCount} of {jobBuckets.length} jobs confirmed
+          <span className="font-semibold text-gray-900">
+            {jobBuckets.length} job suggestions
+          </span>{' '}
+          (confirm to apply)
+          <br />
+          Based on: {summary.addressResolved.toLocaleString()} photos with
+          resolved address / {summary.totalPhotos.toLocaleString()} total
         </div>
       )}
 
@@ -176,7 +241,7 @@ export default function BucketsPage() {
                         )}
                       </div>
                       <div className="mt-1 text-sm text-gray-500">
-                        ≈ {bucket.photoIds.length.toLocaleString()} photos · {formatDateRange(bucket)}
+                        {bucket.photoIds.length.toLocaleString()} photos · {formatDateRange(bucket)}
                       </div>
                     </>
                   )}
@@ -238,29 +303,43 @@ export default function BucketsPage() {
         </div>
       )}
 
-      {/* Unlocated photos - collapsed by default */}
-      {unlocatedBucket && unlocatedBucket.photoIds.length > 0 && (
-        <div className="border-t pt-4">
-          <div className="rounded-xl border border-dashed p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-600">
-                  {unlocatedBucket.photoIds.length.toLocaleString()} photos without GPS
-                </div>
-                <div className="text-xs text-gray-400">
-                  You can organize these later
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Missing-data Buckets - 防胡扯护栏 */}
+      {/* These explain why only X job suggestions exist out of Y total photos */}
+      <div className="space-y-3">
+        <BucketCard
+          type="unknownLocation"
+          count={missingBuckets.unknownLocation.count}
+          onOpen={() => router.push('/rescue/buckets/bucket_unlocated')}
+        />
+
+        <BucketCard
+          type="geocodeFailed"
+          count={missingBuckets.geocodeFailed?.count ?? 0}
+          onOpen={() => alert('Open: Address unresolved review')}
+          secondaryAction={{
+            label: 'Retry lookup',
+            onClick: () => alert('Retry geocode'),
+          }}
+        />
+
+        <BucketCard
+          type="likelyPersonal"
+          count={missingBuckets.likelyPersonal?.count ?? 0}
+          onOpen={() => alert('Open: Likely personal')}
+        />
+
+        <BucketCard
+          type="unsure"
+          count={missingBuckets.unsure?.count ?? 0}
+          onOpen={() => alert('Open: Unsure review')}
+        />
+      </div>
 
       {/* Trust message */}
       <div className="text-center text-sm text-gray-500">
         Nothing has been changed yet.
         <br />
-        You're in full control.
+        You&apos;re in full control.
       </div>
 
       {/* Navigation */}
