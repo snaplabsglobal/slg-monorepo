@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { CreateJobRequest, Job, JobListResponse } from '@/lib/types'
 
+// Force no caching for all responses
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+}
+
 /**
  * GET /api/jobs - List jobs for the user's organization
  * Query params:
@@ -66,10 +72,10 @@ export async function GET(request: NextRequest) {
       total: count || 0,
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, { headers: NO_CACHE_HEADERS })
   } catch (error) {
     console.error('Jobs GET error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: NO_CACHE_HEADERS })
   }
 }
 
@@ -119,9 +125,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
     }
 
-    return NextResponse.json(job, { status: 201 })
+    return NextResponse.json(job, { status: 201, headers: NO_CACHE_HEADERS })
   } catch (error) {
     console.error('Jobs POST error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: NO_CACHE_HEADERS })
   }
 }

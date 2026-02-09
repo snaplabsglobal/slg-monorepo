@@ -1,6 +1,7 @@
 import useSWR, { mutate as globalMutate } from 'swr'
 import type { Job, JobListResponse } from '@/lib/types'
 
+// Fetcher with no-store to prevent caching
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(res => {
   if (!res.ok) throw new Error('Failed to fetch')
   return res.json()
@@ -8,22 +9,34 @@ const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(res => {
 
 type JobStatus = 'active' | 'archived' | 'all'
 
+// Helper to get the SWR key for jobs
+const getJobsKey = (status: JobStatus) => `/api/jobs?status=${status}`
+
+// Mutate all jobs keys (active/archived/all) to ensure consistency
+const mutateAllJobsKeys = async () => {
+  await globalMutate(
+    (key: unknown) => typeof key === 'string' && key.startsWith('/api/jobs?status=')
+  )
+}
+
 /**
  * SWR hook for fetching jobs list
  *
  * Features:
- * - Automatic caching
+ * - Automatic caching with no-store fetch
  * - Revalidation on focus
- * - Optimistic updates via mutate
+ * - Proper optimistic updates with rollback on failure
  */
 export function useJobs(status: JobStatus = 'active') {
+  const key = getJobsKey(status)
+
   const { data, error, isLoading, mutate } = useSWR<JobListResponse>(
-    `/api/jobs?status=${status}`,
+    key,
     fetcher,
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      dedupingInterval: 2000,
+      dedupingInterval: 0, // No deduping to ensure fresh data
     }
   )
 
@@ -32,6 +45,7 @@ export function useJobs(status: JobStatus = 'active') {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, address }),
+      cache: 'no-store',
     })
 
     if (!res.ok) {
@@ -41,62 +55,78 @@ export function useJobs(status: JobStatus = 'active') {
 
     const newJob: Job = await res.json()
 
-    // Optimistic update
-    mutate(
+    // Optimistic update then revalidate
+    await mutate(
       current => current
         ? { jobs: [newJob, ...current.jobs], total: current.total + 1 }
         : { jobs: [newJob], total: 1 },
       { revalidate: false }
     )
 
+    // Revalidate all jobs keys
+    await mutateAllJobsKeys()
+
     return newJob
   }
 
   const archiveJob = async (jobId: string) => {
-    const res = await fetch(`/api/jobs/${jobId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'archived' }),
-    })
-
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Failed to archive job')
-    }
-
-    // Optimistic update - remove from active list
-    mutate(
+    // 1) Optimistic update - remove from current list (no revalidate)
+    await mutate(
       current => current
         ? { jobs: current.jobs.filter(j => j.id !== jobId), total: current.total - 1 }
         : { jobs: [], total: 0 },
       { revalidate: false }
     )
 
-    // Also refresh archived list
-    globalMutate((key: unknown) =>
-      typeof key === 'string' && key.includes('/api/jobs')
-    )
+    // 2) Call API
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      // 3) Rollback on failure
+      await mutate()
+      const data = await res.json()
+      throw new Error(data.error || 'Failed to archive job')
+    }
+
+    // 4) Success - revalidate all jobs keys to get fresh data
+    await mutateAllJobsKeys()
 
     return res.json()
   }
 
   const deleteJob = async (jobId: string) => {
-    const res = await fetch(`/api/jobs/${jobId}`, {
-      method: 'DELETE',
-    })
-
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Failed to delete job')
-    }
-
-    // Optimistic update
-    mutate(
+    // 1) Optimistic update - remove from list immediately (no revalidate)
+    await mutate(
       current => current
         ? { jobs: current.jobs.filter(j => j.id !== jobId), total: current.total - 1 }
         : { jobs: [], total: 0 },
       { revalidate: false }
     )
+
+    // 2) Call delete API
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: 'DELETE',
+      cache: 'no-store',
+    })
+
+    const json = await res.json()
+
+    // Log for debugging
+    console.log('[deleteJob] API response:', json)
+
+    if (!res.ok || !json.ok) {
+      // 3) Rollback on failure - revalidate to get real data
+      await mutate()
+      throw new Error(json.error || 'Failed to delete job')
+    }
+
+    // 4) Success - force revalidate all jobs keys to ensure consistency
+    await mutateAllJobsKeys()
 
     return true
   }
