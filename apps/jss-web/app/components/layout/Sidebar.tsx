@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Folder, Camera, Sparkles, Settings } from 'lucide-react'
+import { JSSLogo } from '@/components/ui/JSSLogo'
 
 /**
  * Sidebar Navigation - Desktop (Manus对齐版)
@@ -53,14 +54,8 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-gray-200">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-100">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgb(245,158,11)]">
-          <Camera className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold text-gray-900">JobSite Snap</div>
-          <div className="text-xs text-gray-500">Job Photos</div>
-        </div>
+      <div className="px-6 py-5 border-b border-gray-100">
+        <JSSLogo size="md" />
       </div>
 
       {/* Navigation */}
