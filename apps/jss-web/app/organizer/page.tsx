@@ -65,7 +65,8 @@ type Cluster = {
 }
 
 type ScanResponse = {
-  scan_id: string
+  scan_id: string | null  // null in stateless mode
+  stateless?: boolean
   scope: { mode: string }
   stats: ScanStats
   date_range: DateRange
@@ -104,7 +105,11 @@ async function createScan(): Promise<ScanResponse> {
   return res.json()
 }
 
-async function getScan(scanId: string): Promise<ScanResponse> {
+async function getScan(scanId: string | null | undefined): Promise<ScanResponse | null> {
+  // P0 guard: stateless mode has no stored scan
+  if (!scanId || scanId === 'null') {
+    return null
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}`)
   if (!res.ok) throw new Error('Failed to load scan')
   return res.json()
@@ -129,10 +134,14 @@ async function getProgress(scanId: string | null | undefined): Promise<ProgressR
 }
 
 async function confirmCluster(
-  scanId: string,
+  scanId: string | null | undefined,
   clusterId: string,
   jobName?: string
 ): Promise<{ result: string; job: { job_id: string; name: string } }> {
+  // P0 guard: stateless mode - use placeholder endpoint
+  if (!scanId || scanId === 'null') {
+    throw new Error('Cannot confirm cluster in stateless mode')
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}/clusters/${clusterId}/confirm`, {
     method: 'POST',
     headers: {
@@ -148,7 +157,11 @@ async function confirmCluster(
   return res.json()
 }
 
-async function skipCluster(scanId: string, clusterId: string): Promise<void> {
+async function skipCluster(scanId: string | null | undefined, clusterId: string): Promise<void> {
+  // P0 guard: stateless mode
+  if (!scanId || scanId === 'null') {
+    throw new Error('Cannot skip cluster in stateless mode')
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}/clusters/${clusterId}/skip`, {
     method: 'POST',
     headers: {
@@ -163,7 +176,11 @@ async function skipCluster(scanId: string, clusterId: string): Promise<void> {
   }
 }
 
-async function skipUnknown(scanId: string, photoIds: string[]): Promise<void> {
+async function skipUnknown(scanId: string | null | undefined, photoIds: string[]): Promise<void> {
+  // P0 guard: stateless mode
+  if (!scanId || scanId === 'null') {
+    throw new Error('Cannot skip unknown in stateless mode')
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}/unknown/skip`, {
     method: 'POST',
     headers: {
@@ -178,7 +195,11 @@ async function skipUnknown(scanId: string, photoIds: string[]): Promise<void> {
   }
 }
 
-async function applyScan(scanId: string): Promise<{ result: string }> {
+async function applyScan(scanId: string | null | undefined): Promise<{ result: string }> {
+  // P0 guard: stateless mode - nothing to batch apply
+  if (!scanId || scanId === 'null') {
+    return { result: 'stateless_noop' }
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}/apply`, {
     method: 'POST',
   })
