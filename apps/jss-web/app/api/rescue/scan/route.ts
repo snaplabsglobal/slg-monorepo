@@ -1,33 +1,44 @@
 /**
  * POST /api/rescue/scan
  *
- * Creates a new Rescue scan session with full transparency stats.
+ * Rescue Mode Suggestion Engine - 计算照片聚类建议
+ *
+ * 🚨 核心原则：Rescue 是 Suggestion Engine，算出来就必须给用户看
+ * - 绝对禁止：因 DB 写入失败而返回 500
+ * - DB 写入失败时进入 stateless mode (scan_id = null)
  *
  * 必须行为:
  * 1. 校验 scope.mode === 'unassigned' (v1 只允许这个)
  * 2. 从 DB 选候选照片: job_id IS NULL, rescue_status = 'unreviewed'
- * 3. 计算 stats (所有数字在 DB 侧算)
+ * 3. 计算 stats (所有数字在应用侧算)
  * 4. 聚类 (地点 + 时间) 得到 clusters + unknown
- * 5. 原子写入 rescue_scans / rescue_clusters / rescue_unknown
+ * 5. Best-effort 写入 rescue_scans / rescue_clusters / rescue_unknown (用 service role)
  * 6. 返回 scan_result (包含 stats + date_range)
  *
- * 强制校验点:
- * - date_range basis: min/max(taken_at) 或 fallback
- * - cluster photo_count 用 array_length(photo_ids)
- * - unknown_count 必须来自 missing_gps 子集
- *
  * DEBUG MODE (dev only):
- * ?debug_stage=1 → 只查候选 photo count，直接 return { total_candidates }
+ * ?debug_stage=1 → 只查候选 photo count
  * ?debug_stage=2 → 加上 stats + date_range
- * ?debug_stage=3 → 加上 cluster + geocode（不写 DB）
- * 无参数或其他值 → 完整流程（含 DB 写入）
- *
- * 用于快速定位：是 DB 查询炸？聚类炸？geocode 炸？还是 insert 炸？
+ * ?debug_stage=3 → 加上 cluster（不写 DB）
+ * 无参数 → 完整流程（含 DB 写入）
  */
 
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
 import { randomBytes } from 'crypto'
+
+// ============================================================
+// Service Role Client for Rescue writes (bypass RLS)
+// Rescue 是系统行为，不是用户内容编辑
+// ============================================================
+function createServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    return null
+  }
+  return createClient(url, serviceKey)
+}
 
 // Generate a short unique ID
 function generateScanId(): string {
@@ -196,8 +207,11 @@ export async function POST(req: Request) {
       })
     }
 
+    // Create service role client for writes (bypass RLS)
+    const serviceClient = createServiceClient()
+
     // Ensure we have an array (Supabase returns null when no results)
-    return processAndSave(finalPhotos, scan_id, scopeMode, organization_id, user_id, supabase, isDev ? debugStage : 0)
+    return processAndSave(finalPhotos, scan_id, scopeMode, organization_id, user_id, serviceClient, isDev ? debugStage : 0)
   } catch (error) {
     console.error('[rescue/scan] Unhandled error:', error)
     return NextResponse.json(
@@ -213,8 +227,9 @@ async function processAndSave(
   scopeMode: string,
   organization_id: string,
   user_id: string,
+  // Service role client for writes (may be null if env not configured)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  serviceClient: any | null,
   debugStage: number = 0
 ) {
   // ============================================================
@@ -390,71 +405,95 @@ async function processAndSave(
   }
 
   // ============================================================
-  // 原子写入: rescue_scans + rescue_clusters + rescue_unknown
+  // Best-effort 非事务写入: rescue_scans → rescue_clusters → rescue_unknown
+  // 🚨 绝对禁止因 DB 写入失败而 500
+  // 🚨 失败时进入 stateless mode (scan_id = null)
   // ============================================================
 
-  let dbWriteResult = {
-    rescue_scans: { success: false, error: null as string | null },
-    rescue_clusters: { success: false, error: null as string | null, count: 0 },
-    rescue_unknown: { success: false, error: null as string | null },
-    used_fallback_table: false,
-  }
+  let dbWriteResult: {
+    success: boolean
+    rescue_scans: { success: boolean; error: string | null }
+    rescue_clusters: { success: boolean; error: string | null; count: number }
+    rescue_unknown: { success: boolean; error: string | null }
+    used_fallback_table: boolean
+  } | null = null
 
-  try {
-    // 1. 写入 scan (尝试新表，fallback 到旧表)
-    const { error: scanError } = await supabase
-      .from('rescue_scans')
-      .insert({
-        id: scan_id,
-        organization_id,
-        created_by: user_id,
-        scope_mode: scopeMode,
-        stats_json: stats,
-        date_range_min: dateRangeMin,
-        date_range_max: dateRangeMax,
-        date_range_basis: dateRangeBasis,
-        status: 'active',
-      })
+  // 只有 serviceClient 可用时才尝试写入
+  if (serviceClient) {
+    dbWriteResult = {
+      success: false,
+      rescue_scans: { success: false, error: null },
+      rescue_clusters: { success: false, error: null, count: 0 },
+      rescue_unknown: { success: false, error: null },
+      used_fallback_table: false,
+    }
 
-    if (scanError) {
-      // Fallback: 尝试旧表 rescue_scan_sessions
-      console.warn('rescue_scans insert failed, trying rescue_scan_sessions:', scanError.message)
-      dbWriteResult.rescue_scans.error = scanError.message
-
-      const { error: fallbackScanError } = await supabase
-        .from('rescue_scan_sessions')
+    // ---- 1. rescue_scans (try new table, fallback to old) ----
+    try {
+      const { error: scanError } = await serviceClient
+        .from('rescue_scans')
         .insert({
           id: scan_id,
           organization_id,
-          user_id,
+          created_by: user_id,
           scope_mode: scopeMode,
-          stats,
-          date_range: { min: dateRangeMin, max: dateRangeMax, basis: dateRangeBasis },
-          clusters: clusters.map(c => ({
-            cluster_id: c.cluster_id,
-            photo_ids: c.photo_ids,
-            photo_count: c.photo_count,
-            centroid: { lat: c.centroid_lat, lng: c.centroid_lng, accuracy_m: c.centroid_accuracy_m },
-            time_range: { min: c.time_min, max: c.time_max },
-            geohash: c.geohash,
-            address: null,
-          })),
-          unknown_photo_ids: unknownPhotoIds,
+          stats_json: stats,
+          date_range_min: dateRangeMin,
+          date_range_max: dateRangeMax,
+          date_range_basis: dateRangeBasis,
           status: 'active',
         })
 
-      if (fallbackScanError) {
-        console.error('Failed to save scan session (both tables):', fallbackScanError)
-        dbWriteResult.rescue_scans.error = `new: ${scanError.message}, old: ${fallbackScanError.message}`
+      if (scanError) {
+        console.warn('[rescue.scan] rescue_scans insert failed, trying fallback:', scanError.message)
+        dbWriteResult.rescue_scans.error = scanError.message
+
+        // Fallback: 旧表 rescue_scan_sessions
+        try {
+          const { error: fallbackError } = await serviceClient
+            .from('rescue_scan_sessions')
+            .insert({
+              id: scan_id,
+              organization_id,
+              user_id,
+              scope_mode: scopeMode,
+              stats,
+              date_range: { min: dateRangeMin, max: dateRangeMax, basis: dateRangeBasis },
+              clusters: clusters.map(c => ({
+                cluster_id: c.cluster_id,
+                photo_ids: c.photo_ids,
+                photo_count: c.photo_count,
+                centroid: { lat: c.centroid_lat, lng: c.centroid_lng, accuracy_m: c.centroid_accuracy_m },
+                time_range: { min: c.time_min, max: c.time_max },
+                geohash: c.geohash,
+                address: null,
+              })),
+              unknown_photo_ids: unknownPhotoIds,
+              status: 'active',
+            })
+
+          if (fallbackError) {
+            console.error('[rescue.scan] fallback table also failed:', fallbackError.message)
+            dbWriteResult.rescue_scans.error = `new: ${scanError.message}, old: ${fallbackError.message}`
+          } else {
+            dbWriteResult.rescue_scans.success = true
+            dbWriteResult.used_fallback_table = true
+          }
+        } catch (e) {
+          console.error('[rescue.scan] fallback insert threw:', e)
+        }
       } else {
         dbWriteResult.rescue_scans.success = true
-        dbWriteResult.used_fallback_table = true
       }
-    } else {
-      dbWriteResult.rescue_scans.success = true
+    } catch (e) {
+      console.error('[rescue.scan] rescue_scans threw:', e)
+      dbWriteResult.rescue_scans.error = e instanceof Error ? e.message : 'Unknown error'
+    }
 
-      // 2. 写入 clusters
-      if (clusters.length > 0) {
+    // ---- 2. rescue_clusters (independent, best-effort) ----
+    // 只有主表写入成功才写 clusters
+    if (dbWriteResult.rescue_scans.success && !dbWriteResult.used_fallback_table && clusters.length > 0) {
+      try {
         const clusterRows = clusters.map(c => ({
           id: c.cluster_id,
           scan_id,
@@ -470,25 +509,31 @@ async function processAndSave(
           status: 'unreviewed',
         }))
 
-        const { error: clustersError } = await supabase
+        const { error: clustersError } = await serviceClient
           .from('rescue_clusters')
           .insert(clusterRows)
 
         if (clustersError) {
-          console.error('Failed to save clusters:', clustersError)
+          console.error('[rescue.scan] rescue_clusters insert failed:', clustersError.message)
           dbWriteResult.rescue_clusters.error = clustersError.message
         } else {
           dbWriteResult.rescue_clusters.success = true
           dbWriteResult.rescue_clusters.count = clusters.length
         }
-      } else {
-        dbWriteResult.rescue_clusters.success = true
-        dbWriteResult.rescue_clusters.count = 0
+      } catch (e) {
+        console.error('[rescue.scan] rescue_clusters threw:', e)
+        dbWriteResult.rescue_clusters.error = e instanceof Error ? e.message : 'Unknown error'
       }
+    } else if (clusters.length === 0) {
+      dbWriteResult.rescue_clusters.success = true
+      dbWriteResult.rescue_clusters.count = 0
+    }
 
-      // 3. 写入 unknown
-      if (unknownPhotoIds.length > 0) {
-        const { error: unknownError } = await supabase
+    // ---- 3. rescue_unknown (independent, best-effort) ----
+    // 只有主表写入成功才写 unknown
+    if (dbWriteResult.rescue_scans.success && !dbWriteResult.used_fallback_table && unknownPhotoIds.length > 0) {
+      try {
+        const { error: unknownError } = await serviceClient
           .from('rescue_unknown')
           .insert({
             scan_id,
@@ -498,26 +543,37 @@ async function processAndSave(
           })
 
         if (unknownError) {
-          console.error('Failed to save unknown:', unknownError)
+          console.error('[rescue.scan] rescue_unknown insert failed:', unknownError.message)
           dbWriteResult.rescue_unknown.error = unknownError.message
         } else {
           dbWriteResult.rescue_unknown.success = true
         }
-      } else {
-        dbWriteResult.rescue_unknown.success = true
+      } catch (e) {
+        console.error('[rescue.scan] rescue_unknown threw:', e)
+        dbWriteResult.rescue_unknown.error = e instanceof Error ? e.message : 'Unknown error'
       }
+    } else if (unknownPhotoIds.length === 0) {
+      dbWriteResult.rescue_unknown.success = true
     }
-  } catch (e) {
-    console.error('Failed to save scan session:', e)
-    dbWriteResult.rescue_scans.error = e instanceof Error ? e.message : 'Unknown error'
+
+    // 总体成功判断
+    dbWriteResult.success = dbWriteResult.rescue_scans.success
+  } else {
+    console.warn('[rescue.scan] No service client available, entering stateless mode')
   }
 
   // ============================================================
   // 返回响应
+  // 🚨 核心：scan_id = null 当 DB 写入失败 (stateless mode)
+  // UI 看到 scan_id = null 时，不显示 "Apply"，只允许手动 confirm
   // ============================================================
 
+  const dbWriteSuccess = dbWriteResult?.success ?? false
+  const finalScanId = dbWriteSuccess ? scan_id : null
+
   return NextResponse.json({
-    scan_id,
+    // scan_id: null = stateless mode (DB 写入失败)
+    scan_id: finalScanId,
     scope: { mode: scopeMode },
     stats,
     date_range: {
@@ -543,6 +599,8 @@ async function processAndSave(
       photo_count: unknownPhotoIds.length,
       reasons: ['missing_gps'],
     },
+    // stateless mode 标记
+    stateless: !dbWriteSuccess,
     // 只在 dev 环境返回 DB 写入诊断信息
     ...(process.env.NODE_ENV !== 'production' ? { _db_write: dbWriteResult } : {}),
   })
