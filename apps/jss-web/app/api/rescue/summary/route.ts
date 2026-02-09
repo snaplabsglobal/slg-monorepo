@@ -1,7 +1,11 @@
 /**
  * GET /api/rescue/summary
  *
- * Returns rescue mode summary with bucket counts.
+ * Returns rescue mode summary with REAL data.
+ *
+ * Data source (ONLY valid input):
+ *   job_id IS NULL AND rescue_status = 'unreviewed'
+ *
  * Used by Rescue Mode page to determine state (inactive/active).
  */
 
@@ -21,89 +25,72 @@ export async function GET() {
     return NextResponse.json({ error: msg }, { status: code })
   }
 
-  // Count photos by classification/status
-  // Note: These queries may be expensive for large datasets
-  // Consider adding a summary cache table if needed
+  // ============================================================
+  // ONLY valid data source for Rescue Mode:
+  // job_id IS NULL AND rescue_status = 'unreviewed'
+  // ============================================================
 
-  // Total photos
-  const { count: totalPhotos } = await supabase
+  // Total unassigned + unreviewed photos (the ONLY input to Rescue)
+  const { count: totalUnreviewed, error: countError } = await supabase
     .from('job_photos')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', organization_id)
     .is('deleted_at', null)
+    .is('job_id', null)
+    .eq('rescue_status', 'unreviewed')
 
-  // Unknown location (missing GPS)
+  if (countError) {
+    // If rescue_status column doesn't exist yet, fall back to just job_id IS NULL
+    const { count: fallbackCount } = await supabase
+      .from('job_photos')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organization_id)
+      .is('deleted_at', null)
+      .is('job_id', null)
+
+    return NextResponse.json({
+      unreviewed_count: fallbackCount ?? 0,
+      has_rescue_items: (fallbackCount ?? 0) > 0,
+      ready_to_apply: false,
+      migration_pending: true,
+    })
+  }
+
+  // Count photos with GPS (can be clustered)
+  const { count: withGpsCount } = await supabase
+    .from('job_photos')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', organization_id)
+    .is('deleted_at', null)
+    .is('job_id', null)
+    .eq('rescue_status', 'unreviewed')
+    .not('temp_lat', 'is', null)
+    .not('temp_lng', 'is', null)
+
+  // Count photos without GPS (unknown location)
   const { count: unknownLocationCount } = await supabase
     .from('job_photos')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', organization_id)
     .is('deleted_at', null)
+    .is('job_id', null)
+    .eq('rescue_status', 'unreviewed')
     .or('temp_lat.is.null,temp_lng.is.null')
 
-  // Low accuracy (GPS accuracy > 200m)
-  const { count: lowAccuracyCount } = await supabase
-    .from('job_photos')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', organization_id)
-    .is('deleted_at', null)
-    .not('temp_lat', 'is', null)
-    .not('temp_lng', 'is', null)
-    .gt('temp_accuracy_m', 200)
-
-  // Likely personal (user or AI classified as personal)
-  const { count: likelyPersonalCount } = await supabase
-    .from('job_photos')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', organization_id)
-    .is('deleted_at', null)
-    .or(
-      'user_classification.eq.personal,and(user_classification.is.null,ai_classification.eq.personal)'
-    )
-
-  // Unsure (no classification)
-  const { count: unsureCount } = await supabase
-    .from('job_photos')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', organization_id)
-    .is('deleted_at', null)
-    .is('user_classification', null)
-    .or('ai_classification.is.null,ai_classification.eq.unsure')
-
-  // Likely jobsite
-  const { count: likelyJobsiteCount } = await supabase
-    .from('job_photos')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', organization_id)
-    .is('deleted_at', null)
-    .or(
-      'user_classification.eq.jobsite,and(user_classification.is.null,ai_classification.eq.jobsite)'
-    )
-
-  // Geocode failed count is 0 for now (requires smart_trace_suggestion field)
-  const geocodeFailedCount = 0
+  // Check if ready to apply (no unreviewed items left)
+  const readyToApply = (totalUnreviewed ?? 0) === 0
 
   return NextResponse.json({
-    sampled: false,
-    sample_limit: 0,
-    summary: {
-      total_photos_scanned: totalPhotos ?? 0,
-      likely_jobsite_count: likelyJobsiteCount ?? 0,
-      likely_personal_count: likelyPersonalCount ?? 0,
-      unsure_count: unsureCount ?? 0,
-      unknown_location_count: unknownLocationCount ?? 0,
-      low_accuracy_count: lowAccuracyCount ?? 0,
-      geocode_failed_count: geocodeFailedCount,
-    },
-    buckets: {
-      unknownLocation: { count: unknownLocationCount ?? 0 },
-      geocodeFailed: { count: geocodeFailedCount },
-      lowAccuracy: { count: lowAccuracyCount ?? 0 },
-      likelyPersonal: { count: likelyPersonalCount ?? 0 },
-      unsure: { count: unsureCount ?? 0 },
-    },
-    capabilities: {
-      geocode_is_proxy: true,
-      suggestions_based_on_job_id: true,
-    },
+    // Real counts - no fake data
+    unreviewed_count: totalUnreviewed ?? 0,
+    with_gps_count: withGpsCount ?? 0,
+    unknown_location_count: unknownLocationCount ?? 0,
+
+    // State
+    has_rescue_items: (totalUnreviewed ?? 0) > 0,
+    ready_to_apply: readyToApply,
+
+    // Metadata
+    migration_pending: false,
   })
 }
