@@ -141,6 +141,8 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
   // Handle job switch (does NOT reset camera)
   const handleJobSwitch = useCallback((newJob: Job) => {
     setCurrentJob(newJob)
+    // Save to localStorage for /camera redirect
+    localStorage.setItem('last_job_id', newJob.id)
     // Load photos for new job
     loadPhotosForJob(newJob.id)
   }, [])
@@ -362,6 +364,9 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
 
   // Initialize on mount
   useEffect(() => {
+    // Save current job to localStorage for /camera redirect
+    localStorage.setItem('last_job_id', currentJob.id)
+
     loadExistingPhotos()
     startCamera()
     // Smart Trace: Start GPS tracking immediately (non-blocking)
