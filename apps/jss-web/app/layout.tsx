@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { InstallBanner } from "@/components/pwa/InstallBanner";
 
 export const metadata: Metadata = {
   title: "JobsiteSnap - Never Lose a Job Photo",
@@ -38,6 +39,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <InstallBanner />
         {children}
         <script
           dangerouslySetInnerHTML={{
