@@ -3,10 +3,13 @@
  * Generate PWA icons from jss-logo.svg
  *
  * Generates:
- * - icon-192.png (192x192)
- * - icon-512.png (512x512)
+ * - icon-192.png, icon-512.png (purpose: any)
+ * - icon-192-maskable.png, icon-512-maskable.png (purpose: maskable, with safe area padding)
  * - apple-touch-icon.png (180x180)
- * - favicon.ico (multi-size: 16, 32, 48)
+ * - favicon.ico, favicon.png
+ *
+ * Maskable icons have 10% padding on each side (80% logo size) per PWA spec
+ * https://web.dev/maskable-icon/
  */
 
 import sharp from 'sharp'
@@ -21,6 +24,9 @@ const iconsDir = join(publicDir, 'icons')
 const svgPath = join(iconsDir, 'jss-logo.svg')
 const svgBuffer = readFileSync(svgPath)
 
+// Theme color for maskable icon background
+const THEME_COLOR = '#FF7A00'
+
 async function generatePng(size, outputName) {
   const outputPath = join(iconsDir, outputName)
   await sharp(svgBuffer)
@@ -30,32 +36,53 @@ async function generatePng(size, outputName) {
   console.log(`✅ Generated ${outputName} (${size}x${size})`)
 }
 
+/**
+ * Generate maskable icon with safe area padding
+ * Logo is 80% of the canvas, centered on theme color background
+ */
+async function generateMaskable(size, outputName) {
+  const outputPath = join(iconsDir, outputName)
+  const logoSize = Math.round(size * 0.8) // 80% for safe area
+  const padding = Math.round((size - logoSize) / 2)
+
+  // Resize logo
+  const logo = await sharp(svgBuffer)
+    .resize(logoSize, logoSize)
+    .png()
+    .toBuffer()
+
+  // Create background with theme color and composite logo
+  await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: THEME_COLOR,
+    },
+  })
+    .composite([
+      {
+        input: logo,
+        top: padding,
+        left: padding,
+      },
+    ])
+    .png()
+    .toFile(outputPath)
+
+  console.log(`✅ Generated ${outputName} (${size}x${size}, maskable)`)
+}
+
 async function generateFavicon() {
-  // Generate individual sizes for favicon
-  const sizes = [16, 32, 48]
-  const buffers = []
-
-  for (const size of sizes) {
-    const buf = await sharp(svgBuffer)
-      .resize(size, size)
-      .png()
-      .toBuffer()
-    buffers.push({ size, buffer: buf })
-  }
-
-  // For ICO, we'll use the 32x32 PNG as a simple fallback
-  // (proper ICO generation would need a dedicated library)
-  // Instead, generate a 32x32 PNG as favicon.png
+  // Generate 32x32 PNG favicon
   const favicon32 = await sharp(svgBuffer)
     .resize(32, 32)
     .png()
     .toBuffer()
-
   writeFileSync(join(publicDir, 'favicon.png'), favicon32)
   console.log('✅ Generated favicon.png (32x32)')
 
-  // Also generate favicon.ico using 48x48 PNG
-  // Note: This creates a PNG with .ico extension (works in most browsers)
+  // Generate 48x48 as .ico (PNG format, works in browsers)
   const favicon48 = await sharp(svgBuffer)
     .resize(48, 48)
     .png()
@@ -67,9 +94,13 @@ async function generateFavicon() {
 async function main() {
   console.log('🎨 Generating JSS icons from jss-logo.svg...\n')
 
-  // PWA icons
+  // PWA icons (purpose: any)
   await generatePng(192, 'icon-192.png')
   await generatePng(512, 'icon-512.png')
+
+  // PWA maskable icons (purpose: maskable) - with safe area padding
+  await generateMaskable(192, 'icon-192-maskable.png')
+  await generateMaskable(512, 'icon-512-maskable.png')
 
   // Apple touch icon
   await generatePng(180, 'apple-touch-icon.png')
@@ -78,6 +109,7 @@ async function main() {
   await generateFavicon()
 
   console.log('\n✨ All icons generated!')
+  console.log('\n📱 Test maskable icons at: https://maskable.app/editor')
 }
 
 main().catch(console.error)
