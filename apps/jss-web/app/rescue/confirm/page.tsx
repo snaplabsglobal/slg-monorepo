@@ -5,57 +5,44 @@
  * Route: /rescue/confirm
  *
  * Final review and apply
+ *
+ * From spec (260208_JSS_SelfRescueMode_CTO执行版_整合精简.md):
+ * - Show: groups named as jobs, photos organized, 0 deleted
+ * - "Nothing changes until you click Confirm."
+ * - Undo available for 24 hours
  */
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRescueStore } from '@/lib/rescue'
+import { NamingState } from '@/lib/rescue/types'
 
 export default function ConfirmPage() {
   const router = useRouter()
   const buckets = useRescueStore((s) => s.buckets)
-  const photoAssignment = useRescueStore((s) => s.photoAssignment)
+  const groupNames = useRescueStore((s) => s.groupNames)
+  const groupNamingState = useRescueStore((s) => s.groupNamingState)
   const applyPlan = useRescueStore((s) => s.applyPlan)
   const isApplying = useRescueStore((s) => s.isApplying)
   const reset = useRescueStore((s) => s.reset)
 
   const [applied, setApplied] = useState(false)
 
-  // Calculate summary
-  const buildingBuckets = buckets.filter(
+  // Calculate summary - simplified per spec
+  const jobBuckets = buckets.filter(
     (b) => b.bucketId !== 'bucket_unlocated' && b.bucketId !== 'bucket_noise'
   )
 
-  let totalPhotos = 0
-  let assignedPhotos = 0
-  let unassignedPhotos = 0
-  let sessionsAssigned = 0
+  // Count confirmed groups (named as jobs)
+  const namedGroups = jobBuckets.filter(
+    (b) => groupNamingState[b.bucketId] === NamingState.USER_CONFIRMED
+  )
 
-  for (const bucket of buildingBuckets) {
-    for (const session of bucket.sessions) {
-      const hasAssignment = session.photoIds.some(
-        (pid) => photoAssignment[pid] !== null && photoAssignment[pid] !== undefined
-      )
-      const allAssigned = session.photoIds.every(
-        (pid) => photoAssignment[pid] !== null && photoAssignment[pid] !== undefined
-      )
-
-      totalPhotos += session.photoIds.length
-
-      if (allAssigned) {
-        sessionsAssigned++
-        assignedPhotos += session.photoIds.length
-      } else {
-        for (const pid of session.photoIds) {
-          if (photoAssignment[pid]) {
-            assignedPhotos++
-          } else {
-            unassignedPhotos++
-          }
-        }
-      }
-    }
-  }
+  // Count photos in named groups
+  const photosOrganized = namedGroups.reduce(
+    (sum, b) => sum + b.photoIds.length,
+    0
+  )
 
   const handleApply = async () => {
     await applyPlan()
@@ -111,43 +98,50 @@ export default function ConfirmPage() {
         </p>
       </div>
 
-      {/* Summary */}
-      <div className="rounded-xl border p-4">
-        <h2 className="font-medium">Summary</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl bg-gray-50 p-4">
-            <div className="text-2xl font-semibold">
-              {buildingBuckets.length}
-            </div>
-            <div className="text-sm text-gray-500">Buckets</div>
+      {/* Summary - simplified per spec */}
+      <div className="rounded-xl border bg-gray-50 p-6">
+        <div className="text-lg font-medium text-gray-900 mb-4">
+          You're about to organize:
+        </div>
+        <div className="space-y-3 text-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">•</span>
+            <span className="font-medium">{namedGroups.length}</span> groups named as jobs
           </div>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <div className="text-2xl font-semibold">{sessionsAssigned}</div>
-            <div className="text-sm text-gray-500">Sessions assigned</div>
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">•</span>
+            <span className="font-medium">{photosOrganized.toLocaleString()}</span> photos organized
           </div>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <div className="text-2xl font-semibold">
-              {assignedPhotos.toLocaleString()}
-            </div>
-            <div className="text-sm text-gray-500">Photos organized</div>
-          </div>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <div className="text-2xl font-semibold">0</div>
-            <div className="text-sm text-gray-500">Deleted</div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">•</span>
+            <span className="font-medium">0</span> photos deleted
           </div>
         </div>
       </div>
 
-      {/* Confirmation copy */}
-      <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-        <div className="font-medium text-yellow-800">Before you apply</div>
-        <ul className="mt-2 space-y-1 text-sm text-yellow-700">
-          <li>Nothing changes until you click Confirm.</li>
-          <li>You can undo for 24 hours.</li>
-        </ul>
+      {/* Named groups list */}
+      {namedGroups.length > 0 && (
+        <div className="space-y-2">
+          {namedGroups.map((bucket) => (
+            <div key={bucket.bucketId} className="rounded-lg border p-3">
+              <div className="font-medium">
+                {groupNames[bucket.bucketId] || bucket.suggestedLabel}
+              </div>
+              <div className="text-sm text-gray-500">
+                {bucket.photoIds.length.toLocaleString()} photos
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Confirmation copy - per spec */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div className="text-sm text-blue-900">
+          Nothing changes until you click Confirm.
+          <br />
+          You can undo for 24 hours.
+        </div>
       </div>
 
       {/* Actions */}
