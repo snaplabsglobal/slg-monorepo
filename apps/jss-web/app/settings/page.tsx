@@ -26,12 +26,14 @@ export default function SettingsPage() {
                 <span className="text-sm text-gray-500">Loading...</span>
               </div>
               <div className="border-t" />
-              <Link
-                href="/auth/signout"
-                className="block w-full rounded-xl border border-red-200 px-4 py-3 text-center text-sm text-red-600 hover:bg-red-50"
-              >
-                Sign out
-              </Link>
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  className="block w-full rounded-xl border border-red-200 px-4 py-3 text-center text-sm text-red-600 hover:bg-red-50"
+                >
+                  Sign out
+                </button>
+              </form>
             </div>
           </div>
 
