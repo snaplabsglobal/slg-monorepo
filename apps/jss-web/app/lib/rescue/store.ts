@@ -43,6 +43,13 @@ interface RescueState {
   // Session
   session: RescueSession | null
 
+  // ============================================================
+  // Scan API state
+  // scanId: null = stateless mode (DB 写入失败，只有建议可用)
+  // ============================================================
+  scanId: string | null
+  stateless: boolean
+
   // Photos (loaded from user's device)
   photos: RescuePhoto[]
 
@@ -89,6 +96,10 @@ interface RescueActions {
 
   // Session
   startSession: (sessionId: string, userId: string) => void
+
+  // Scan API state
+  setScanId: (scanId: string | null) => void
+  setStateless: (stateless: boolean) => void
 
   // Photos
   addPhotos: (photos: RescuePhoto[]) => void
@@ -158,6 +169,8 @@ interface RescueActions {
 const initialState: RescueState = {
   step: 'landing',
   session: null,
+  scanId: null,
+  stateless: false,
   photos: [],
   groups: [],
   buckets: [],
@@ -205,6 +218,10 @@ export const useRescueStore = create<RescueState & RescueActions>()(
           },
           step: 'source',
         }),
+
+      // Scan API state
+      setScanId: (scanId) => set({ scanId }),
+      setStateless: (stateless) => set({ stateless }),
 
       // Photos
       addPhotos: (photos) =>
@@ -511,6 +528,8 @@ export const useRescueStore = create<RescueState & RescueActions>()(
       partialize: (state) => ({
         // Only persist essential state
         session: state.session,
+        scanId: state.scanId,
+        stateless: state.stateless,
         photos: state.photos,
         groups: state.groups,
         buckets: state.buckets,

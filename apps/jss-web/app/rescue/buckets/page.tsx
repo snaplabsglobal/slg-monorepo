@@ -21,12 +21,14 @@ import { useRescueStore } from '@/lib/rescue'
 import { NamingState } from '@/lib/rescue/types'
 import { RescueSummaryCard } from '../_components/RescueSummaryCard'
 import { BucketCard } from '../_components/BucketCard'
+import { LimitedModeBanner } from '../_components/LimitedModeBanner'
 import type { RescueSummary, RescueBuckets } from '../_mock/rescue.types'
 
 export default function BucketsPage() {
   const router = useRouter()
   // Add fallback for hydration (zustand persist may return undefined before hydration)
   const buckets = useRescueStore((s) => s.buckets) || []
+  const stateless = useRescueStore((s) => s.stateless) ?? false
   const groupNamingState = useRescueStore((s) => s.groupNamingState) || {}
   const groupNames = useRescueStore((s) => s.groupNames) || {}
   const setGroupNamingState = useRescueStore((s) => s.setGroupNamingState)
@@ -171,6 +173,9 @@ export default function BucketsPage() {
           You&apos;ll review everything before anything is saved.
         </p>
       </div>
+
+      {/* Limited Mode Banner - shown when stateless */}
+      {stateless && <LimitedModeBanner />}
 
       {/* Coverage Summary Card */}
       {summary.totalPhotos > 0 && <RescueSummaryCard data={summary} />}
@@ -338,9 +343,19 @@ export default function BucketsPage() {
 
       {/* Trust message */}
       <div className="text-center text-sm text-gray-500">
-        Nothing has been changed yet.
-        <br />
-        You&apos;re in full control.
+        {stateless ? (
+          <>
+            Limited mode: Confirm each job individually.
+            <br />
+            Changes will be applied immediately.
+          </>
+        ) : (
+          <>
+            Nothing has been changed yet.
+            <br />
+            You&apos;re in full control.
+          </>
+        )}
       </div>
 
       {/* Navigation */}

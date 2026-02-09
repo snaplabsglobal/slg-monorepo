@@ -10,20 +10,27 @@
  * - Show: groups named as jobs, photos organized, 0 deleted
  * - "Nothing changes until you click Confirm."
  * - Undo available for 24 hours
+ *
+ * Stateless Mode:
+ * - No batch apply (changes applied individually per confirm)
+ * - Show summary of confirmed jobs
+ * - No undo (changes already applied)
  */
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRescueStore } from '@/lib/rescue'
 import { NamingState } from '@/lib/rescue/types'
+import { LimitedModeBanner } from '../_components/LimitedModeBanner'
 
 export default function ConfirmPage() {
   const router = useRouter()
-  const buckets = useRescueStore((s) => s.buckets)
-  const groupNames = useRescueStore((s) => s.groupNames)
-  const groupNamingState = useRescueStore((s) => s.groupNamingState)
+  const buckets = useRescueStore((s) => s.buckets) || []
+  const stateless = useRescueStore((s) => s.stateless) ?? false
+  const groupNames = useRescueStore((s) => s.groupNames) || {}
+  const groupNamingState = useRescueStore((s) => s.groupNamingState) || {}
   const applyPlan = useRescueStore((s) => s.applyPlan)
-  const isApplying = useRescueStore((s) => s.isApplying)
+  const isApplying = useRescueStore((s) => s.isApplying) ?? false
   const reset = useRescueStore((s) => s.reset)
 
   const [applied, setApplied] = useState(false)
@@ -89,6 +96,78 @@ export default function ConfirmPage() {
     )
   }
 
+  // ============================================================
+  // Stateless Mode: Changes already applied individually
+  // ============================================================
+  if (stateless) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold">Summary</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Your confirmed jobs have been created
+          </p>
+        </div>
+
+        <LimitedModeBanner />
+
+        {/* Summary */}
+        <div className="rounded-xl border bg-gray-50 p-6">
+          <div className="text-lg font-medium text-gray-900 mb-4">
+            Rescue complete:
+          </div>
+          <div className="space-y-3 text-gray-700">
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">•</span>
+              <span className="font-medium">{namedGroups.length}</span> jobs created
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">•</span>
+              <span className="font-medium">{photosOrganized.toLocaleString()}</span> photos organized
+            </div>
+          </div>
+        </div>
+
+        {/* Named groups list */}
+        {namedGroups.length > 0 && (
+          <div className="space-y-2">
+            {namedGroups.map((bucket) => (
+              <div key={bucket.bucketId} className="rounded-lg border border-green-200 bg-green-50 p-3">
+                <div className="font-medium text-green-900">
+                  {groupNames[bucket.bucketId] || bucket.suggestedLabel}
+                  <span className="ml-2 text-green-600">✓</span>
+                </div>
+                <div className="text-sm text-green-700">
+                  {bucket.photoIds.length.toLocaleString()} photos
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="text-sm text-gray-600">
+            In limited mode, changes were applied immediately when you confirmed each job.
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-center pt-4">
+          <button
+            className="rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white hover:bg-black"
+            onClick={handleDone}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================
+  // Stateful Mode: Batch apply
+  // ============================================================
   return (
     <div className="space-y-6">
       <div>
@@ -101,7 +180,7 @@ export default function ConfirmPage() {
       {/* Summary - simplified per spec */}
       <div className="rounded-xl border bg-gray-50 p-6">
         <div className="text-lg font-medium text-gray-900 mb-4">
-          You're about to organize:
+          You&apos;re about to organize:
         </div>
         <div className="space-y-3 text-gray-700">
           <div className="flex items-center gap-2">
