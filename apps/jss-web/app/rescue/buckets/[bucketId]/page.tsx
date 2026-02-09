@@ -4,18 +4,36 @@
  * Page 4: Job Detail Preview
  * Route: /rescue/buckets/[bucketId]
  *
- * Phase 1 simplified design from spec:
- * - No session/unit complexity
- * - Just show photo preview for this job
- * - User can confirm or go back
- *
- * "Rescue only answers: which job? Not: which unit?"
+ * Upgraded to show real thumbnails with batch loading:
+ * - Real thumbnails (not gray placeholders)
+ * - Load more button (60 photos per batch)
+ * - Exact count (no ≈ symbol)
+ * - Skeleton loading states
  */
 
-import React from 'react'
+/* eslint-disable @next/next/no-img-element */
+
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useRescueStore } from '@/lib/rescue'
 import { NamingState } from '@/lib/rescue/types'
+
+type PhotoThumb = {
+  id: string
+  thumbnail_url: string | null
+  file_url: string
+  taken_at: string
+}
+
+async function fetchPhotoThumbs(photoIds: string[]) {
+  const res = await fetch('/api/rescue/buckets/photos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ photo_ids: photoIds }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ items: PhotoThumb[] }>
+}
 
 export default function BucketDetailPage() {
   const router = useRouter()
@@ -24,31 +42,83 @@ export default function BucketDetailPage() {
 
   const buckets = useRescueStore((s) => s.buckets)
   const groupNames = useRescueStore((s) => s.groupNames)
-  const groupNamingState = useRescueStore((s) => s.groupNamingState)
   const setGroupName = useRescueStore((s) => s.setGroupName)
   const setGroupNamingState = useRescueStore((s) => s.setGroupNamingState)
 
   const bucket = buckets.find((b) => b.bucketId === bucketId)
 
-  if (!bucket) {
+  const displayName = useMemo(() => {
+    if (!bucket) return ''
     return (
-      <div className="space-y-6">
-        <div className="text-center text-gray-500">Job not found</div>
-        <button
-          className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
-          onClick={() => router.push('/rescue/buckets')}
-        >
-          Back to jobs
-        </button>
-      </div>
+      groupNames[bucketId] ||
+      bucket.suggestedLabel ||
+      `Job ${bucketId.slice(-4)}`
     )
-  }
+  }, [bucket, groupNames, bucketId])
 
-  const displayName = groupNames[bucketId] || bucket.suggestedLabel || `Job ${bucketId.slice(-4)}`
-  const isConfirmed = groupNamingState[bucketId] === NamingState.USER_CONFIRMED
+  // Pagination: slice IDs → fetch thumbnails
+  const BATCH = 60
+  const allIds = bucket?.photoIds ?? []
+  const total = allIds.length
+
+  const [loadedCount, setLoadedCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [items, setItems] = useState<PhotoThumb[]>([])
+  const [err, setErr] = useState<string | null>(null)
+
+  // Reset when bucket changes
+  useEffect(() => {
+    setLoadedCount(0)
+    setItems([])
+    setErr(null)
+  }, [bucketId])
+
+  const hasMore = loadedCount < total
+
+  const loadMore = useCallback(async () => {
+    if (!bucket || loading) return
+    if (loadedCount >= total) return
+
+    try {
+      setLoading(true)
+      setErr(null)
+
+      const nextIds = allIds.slice(loadedCount, loadedCount + BATCH)
+      const r = await fetchPhotoThumbs(nextIds)
+
+      // Merge and dedupe
+      setItems((prev) => {
+        const seen = new Set(prev.map((x) => x.id))
+        const merged = [...prev]
+        for (const it of r.items) {
+          if (!seen.has(it.id)) merged.push(it)
+        }
+        return merged
+      })
+
+      setLoadedCount((c) => c + nextIds.length)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load photos'
+      setErr(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [bucket, loading, loadedCount, total, allIds])
+
+  // Initial load
+  useEffect(() => {
+    if (!bucket) return
+    if (total === 0) return
+
+    // Auto-load first batch
+    if (loadedCount === 0 && items.length === 0 && !loading) {
+      loadMore()
+    }
+  }, [bucket, total, loadedCount, items.length, loading, loadMore])
 
   // Format date range
   const formatDateRange = () => {
+    if (!bucket) return ''
     const sessions = bucket.sessions
     if (sessions.length === 0) return ''
 
@@ -87,33 +157,81 @@ export default function BucketDetailPage() {
     router.push('/rescue/buckets')
   }
 
+  if (!bucket) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center text-gray-500">Job not found</div>
+        <button
+          className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+          onClick={() => router.push('/rescue/buckets')}
+        >
+          Back to jobs
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">{displayName}</h1>
         <div className="mt-1 text-sm text-gray-500">
-          ≈ {bucket.photoIds.length.toLocaleString()} photos · {formatDateRange()}
-        </div>
-      </div>
-
-      {/* Photo grid preview */}
-      <div className="rounded-xl border bg-gray-50 p-4">
-        <div className="mb-3 text-sm text-gray-500">Photo preview</div>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
-          {/* Show placeholder thumbnails */}
-          {[...Array(Math.min(24, bucket.photoIds.length))].map((_, i) => (
-            <div
-              key={i}
-              className="aspect-square rounded-lg bg-gray-200"
-            />
-          ))}
-          {bucket.photoIds.length > 24 && (
-            <div className="flex aspect-square items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-500">
-              +{bucket.photoIds.length - 24}
-            </div>
+          {total.toLocaleString()} photos
+          <span className="mx-2">·</span>
+          Loaded {items.length.toLocaleString()}
+          {formatDateRange() && (
+            <>
+              <span className="mx-2">·</span>
+              {formatDateRange()}
+            </>
           )}
         </div>
+        {err && <div className="mt-2 text-sm text-red-600">{err}</div>}
+      </div>
+
+      {/* Photo grid - Real thumbnails */}
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+        {items.map((p) => {
+          const src = p.thumbnail_url ?? p.file_url
+          return (
+            <div
+              key={p.id}
+              className="aspect-square overflow-hidden rounded-lg bg-gray-100"
+            >
+              <img
+                src={src}
+                alt=""
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )
+        })}
+
+        {/* Skeletons while loading */}
+        {loading &&
+          Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={`sk_${i}`}
+              className="aspect-square animate-pulse rounded-lg bg-gray-200"
+            />
+          ))}
+      </div>
+
+      {/* Load More */}
+      <div>
+        {hasMore ? (
+          <button
+            className="w-full rounded-xl border px-6 py-4 text-sm font-semibold hover:bg-gray-50 disabled:opacity-60"
+            onClick={loadMore}
+            disabled={loading}
+          >
+            {loading ? 'Loading…' : 'Load more'}
+          </button>
+        ) : items.length > 0 ? (
+          <div className="text-center text-xs text-gray-500">No more photos</div>
+        ) : null}
       </div>
 
       {/* Info box */}
