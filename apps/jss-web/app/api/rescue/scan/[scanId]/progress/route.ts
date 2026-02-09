@@ -10,6 +10,10 @@
  * - unknown 的 remaining:
  *   count of photos where job_id is null and rescue_status='unreviewed' AND photo_id in rescue_unknown.photo_ids
  * - done = (clusters_unreviewed==0 && unknown_unreviewed==0)
+ *
+ * Stateless Mode:
+ * - scan_id = "stateless" → 直接返回 done: true
+ * - 防止 UI progress 卡住
  */
 
 import { NextResponse } from 'next/server'
@@ -20,6 +24,32 @@ export async function GET(
   { params }: { params: Promise<{ scanId: string }> }
 ) {
   const { scanId } = await params
+
+  // ============================================================
+  // Stateless Mode: scan_id = "stateless" → done: true
+  // ============================================================
+  if (scanId === 'stateless') {
+    return NextResponse.json({
+      scan_id: 'stateless',
+      stateless: true,
+      remaining: {
+        clusters_unreviewed: 0,
+        unknown_unreviewed: 0,
+      },
+      processed: {
+        clusters_confirmed: 0,
+        clusters_skipped: 0,
+        unknown_assigned: 0,
+        unknown_skipped: 0,
+      },
+      totals: {
+        clusters: 0,
+        unknown: 0,
+      },
+      done: true,
+      status: 'stateless',
+    })
+  }
 
   // A. requireSessionOrg
   const auth = await getSessionOrUnauthorized()
