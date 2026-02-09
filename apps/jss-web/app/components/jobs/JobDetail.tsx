@@ -1,50 +1,24 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
-import type { Job, JobPhoto, PhotoListResponse } from '@/lib/types'
+import { usePhotos } from '@/lib/hooks'
+import type { Job, JobPhoto } from '@/lib/types'
 
 interface PhotoTimelineProps {
   jobId: string
-  onPhotoUploaded: () => void
 }
 
-function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
-  const [photos, setPhotos] = useState<JobPhoto[]>([])
-  const [loading, setLoading] = useState(true)
-  const [hasMore, setHasMore] = useState(false)
-  const [offset, setOffset] = useState(0)
+function PhotoTimeline({ jobId }: PhotoTimelineProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<JobPhoto | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
-
-  const fetchPhotos = useCallback(async (reset = false) => {
-    const currentOffset = reset ? 0 : offset
-    setLoading(true)
-
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/photos?limit=20&offset=${currentOffset}`)
-      if (!res.ok) throw new Error('Failed to fetch photos')
-
-      const data: PhotoListResponse = await res.json()
-
-      if (reset) {
-        setPhotos(data.photos)
-        setOffset(data.photos.length)
-      } else {
-        setPhotos(prev => [...prev, ...data.photos])
-        setOffset(prev => prev + data.photos.length)
-      }
-      setHasMore(data.hasMore)
-    } catch (err) {
-      console.error('Error fetching photos:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [jobId, offset])
-
-  useEffect(() => {
-    fetchPhotos(true)
-  }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const {
+    photos,
+    isLoading,
+    isValidating,
+    isEmpty,
+    hasMore,
+    loadMore,
+  } = usePhotos(jobId)
 
   // Group photos by date
   const groupedPhotos = photos.reduce((groups, photo) => {
@@ -61,15 +35,10 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
     return groups
   }, {} as Record<string, JobPhoto[]>)
 
-  const handleRefresh = () => {
-    fetchPhotos(true)
-    onPhotoUploaded()
-  }
-
   return (
     <div>
       {/* Empty State */}
-      {!loading && photos.length === 0 && (
+      {!isLoading && isEmpty && (
         <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
           <svg className="w-20 h-20 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -105,7 +74,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
                   <span className={`
                     absolute top-1 left-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                     ${photo.stage === 'before' ? 'bg-blue-500 text-white' : ''}
-                    ${photo.stage === 'during' ? 'bg-[#FF7A00] text-white' : ''}
+                    ${photo.stage === 'during' ? 'bg-[rgb(245,158,11)] text-white' : ''}
                     ${photo.stage === 'after' ? 'bg-green-500 text-white' : ''}
                   `}>
                     {photo.stage.charAt(0).toUpperCase() + photo.stage.slice(1)}
@@ -118,20 +87,21 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
       ))}
 
       {/* Loading State */}
-      {loading && (
+      {(isLoading || isValidating) && photos.length === 0 && (
         <div className="text-center py-8">
-          <div className="inline-block w-6 h-6 border-2 border-[#FF7A00] border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-6 h-6 border-2 border-[rgb(245,158,11)] border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
       {/* Load More */}
-      {hasMore && !loading && (
-        <div ref={loadMoreRef} className="text-center py-4">
+      {hasMore && (
+        <div className="text-center py-4">
           <button
-            onClick={() => fetchPhotos()}
-            className="px-4 py-2 text-[#FF7A00] hover:text-amber-700"
+            onClick={loadMore}
+            disabled={isValidating}
+            className="px-4 py-2 text-[rgb(245,158,11)] hover:text-amber-700 disabled:opacity-50"
           >
-            Load More
+            {isValidating ? 'Loading...' : 'Load More'}
           </button>
         </div>
       )}
@@ -169,7 +139,7 @@ function PhotoTimeline({ jobId, onPhotoUploaded }: PhotoTimelineProps) {
                     <span className={`
                       px-2 py-0.5 text-xs rounded
                       ${selectedPhoto.stage === 'before' ? 'bg-blue-500' : ''}
-                      ${selectedPhoto.stage === 'during' ? 'bg-[#FF7A00]' : ''}
+                      ${selectedPhoto.stage === 'during' ? 'bg-[rgb(245,158,11)]' : ''}
                       ${selectedPhoto.stage === 'after' ? 'bg-green-500' : ''}
                     `}>
                       {selectedPhoto.stage}
@@ -279,7 +249,7 @@ function PhotoUploadButton({ jobId, onUploaded }: PhotoUploadButtonProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={isUploading}
-        className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-lg hover:bg-[#E66A00] shadow-sm disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 bg-[rgb(245,158,11)] text-white rounded-lg hover:bg-[rgb(220,140,10)] shadow-sm disabled:opacity-50"
       >
         {isUploading ? (
           <>
@@ -304,10 +274,10 @@ interface JobDetailProps {
 }
 
 export function JobDetail({ job }: JobDetailProps) {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const { refresh } = usePhotos(job.id)
 
   const handlePhotoUploaded = () => {
-    setRefreshKey(k => k + 1)
+    refresh()
   }
 
   return (
@@ -339,8 +309,7 @@ export function JobDetail({ job }: JobDetailProps) {
         {/* Primary Action: Take Photos - Full width, prominent */}
         <Link
           href={`/jobs/${job.id}/camera`}
-          className="block w-full py-3.5 text-center text-white font-medium rounded-lg shadow-sm mb-6"
-          style={{ backgroundColor: '#FF7A00' }}
+          className="block w-full py-3.5 text-center text-white font-medium rounded-lg shadow-sm mb-6 bg-[rgb(245,158,11)] hover:bg-[rgb(220,140,10)]"
         >
           <span className="inline-flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,18 +326,13 @@ export function JobDetail({ job }: JobDetailProps) {
           <PhotoUploadButton jobId={job.id} onUploaded={handlePhotoUploaded} />
         </div>
 
-        <PhotoTimeline
-          key={refreshKey}
-          jobId={job.id}
-          onPhotoUploaded={handlePhotoUploaded}
-        />
+        <PhotoTimeline jobId={job.id} />
       </main>
 
       {/* Camera FAB for mobile - hidden on desktop since we have prominent button */}
       <Link
         href={`/jobs/${job.id}/camera`}
-        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center sm:hidden"
-        style={{ backgroundColor: '#FF7A00' }}
+        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center sm:hidden bg-[rgb(245,158,11)]"
       >
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
