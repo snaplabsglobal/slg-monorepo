@@ -48,8 +48,8 @@ export function DashboardLayout({ children, header, hideBottomNav }: DashboardLa
           )}
         </header>
 
-        {/* Page content */}
-        <main className={`${hideBottomNav ? '' : 'pb-20 md:pb-0'}`}>
+        {/* Page content - pb-[76px] matches BottomNav height */}
+        <main className={`${hideBottomNav ? '' : 'pb-[76px] md:pb-0'}`}>
           {children}
         </main>
       </div>
