@@ -81,7 +81,7 @@ export function BottomNav() {
             <div className="px-4 pb-4 space-y-1">
               {/* Rescue Mode */}
               <Link
-                href="/rescue/organizer"
+                href="/rescue"
                 onClick={() => setShowSheet(false)}
                 className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-gray-50"
               >

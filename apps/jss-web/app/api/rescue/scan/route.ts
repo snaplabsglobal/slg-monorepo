@@ -1,49 +1,40 @@
 /**
  * POST /api/rescue/scan
  *
- * Rescue Mode Suggestion Engine - 计算照片聚类建议
+ * Rescue Mode v1 - Suggestion Engine (Endpoint A)
  *
- * 🚨 核心原则：Rescue 是 Suggestion Engine，算出来就必须给用户看
- * - 绝对禁止：因 DB 写入失败而返回 500
- * - DB 写入失败时进入 stateless mode (scan_id = null)
+ * 🚨 核心设计原则:
+ * - Rescue = Suggestion Engine（不是后台任务）
+ * - Stateless-first（无 scan session）
+ * - Compute-only（scan 不做任何写入）
+ * - 唯一写操作是 /confirm 和 /skip
  *
- * 必须行为:
- * 1. 校验 scope.mode === 'unassigned' (v1 只允许这个)
- * 2. 从 DB 选候选照片: job_id IS NULL, rescue_status = 'unreviewed'
- * 3. 计算 stats (所有数字在应用侧算)
- * 4. 聚类 (地点 + 时间) 得到 clusters + unknown
- * 5. Best-effort 写入 rescue_scans / rescue_clusters / rescue_unknown (用 service role)
- * 6. 返回 scan_result (包含 stats + date_range)
+ * Request:
+ *   { "scope": { "mode": "unassigned" }, "limit": 2000 }
+ *
+ * Response Contract (稳定):
+ *   {
+ *     "stateless": true,
+ *     "scope": { "mode": "unassigned" },
+ *     "stats": { total_candidates, cluster_count, unknown_count, ... },
+ *     "date_range": { min, max, basis },
+ *     "clusters": [{ cluster_id, suggested_job, photo_ids, photo_count, reasons }],
+ *     "unknown": { photo_ids, photo_count, reasons }
+ *   }
+ *
+ * Candidates Query (唯一合法):
+ *   WHERE org_id = :org
+ *     AND job_id IS NULL
+ *     AND rescue_status = 'unreviewed'
  *
  * DEBUG MODE (dev only):
  * ?debug_stage=1 → 只查候选 photo count
  * ?debug_stage=2 → 加上 stats + date_range
- * ?debug_stage=3 → 加上 cluster（不写 DB）
- * 无参数 → 完整流程（含 DB 写入）
+ * ?debug_stage=3 → 加上 cluster 统计
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
-import { randomBytes } from 'crypto'
-
-// ============================================================
-// Service Role Client for Rescue writes (bypass RLS)
-// Rescue 是系统行为，不是用户内容编辑
-// ============================================================
-function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    return null
-  }
-  return createClient(url, serviceKey)
-}
-
-// Generate a short unique ID
-function generateScanId(): string {
-  return `rs_${randomBytes(8).toString('hex')}`
-}
 
 // Geohash encoding (precision 7 = ~150m)
 const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz'
@@ -127,10 +118,10 @@ export async function POST(req: Request) {
     const auth = await getSessionOrUnauthorized()
     if (!auth.ok) return auth.response
 
-    const { supabase, organization_id, user_id } = auth.ctx
+    const { supabase, organization_id } = auth.ctx
 
     // Parse request
-    let body: { scope?: { mode?: string } } = {}
+    let body: { scope?: { mode?: string }; limit?: number } = {}
     try {
       body = await req.json()
     } catch {
@@ -138,6 +129,7 @@ export async function POST(req: Request) {
     }
 
     const scopeMode = body.scope?.mode || 'unassigned'
+    const limit = Math.min(body.limit || 2000, 2000)
 
     // v1: Only allow 'unassigned' mode
     if (scopeMode !== 'unassigned') {
@@ -147,16 +139,15 @@ export async function POST(req: Request) {
       )
     }
 
-    // Generate scan_id
-    const scan_id = generateScanId()
-
     // ============================================================
-    // Query candidate photos: job_id IS NULL
+    // Query candidate photos: job_id IS NULL AND rescue_status = 'unreviewed'
     // ============================================================
-    // P1-4: Rescue 只查 job_id IS NULL
-    // - 不依赖 rescue_status
-    // - 不依赖 ai_classification
-    // - 只基于已有字段做 grouping (taken_at, gps)
+    // v1 Candidates (唯一合法):
+    //   WHERE org_id = :org
+    //     AND job_id IS NULL
+    //     AND rescue_status = 'unreviewed'
+    //
+    // Exclusions: confirmed / skipped 永不再返回
 
     const { data: photos, error: queryError } = await supabase
       .from('job_photos')
@@ -164,8 +155,9 @@ export async function POST(req: Request) {
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
       .is('job_id', null)
+      .eq('rescue_status', 'unreviewed')
       .order('taken_at', { ascending: true, nullsFirst: false })
-      .limit(10000)
+      .limit(limit)
 
     if (queryError) {
       return NextResponse.json({
@@ -187,15 +179,12 @@ export async function POST(req: Request) {
         debug_stage: 1,
         debug_checkpoint: 'db_query_ok',
         total_candidates: finalPhotos.length,
-        query: 'job_id IS NULL AND deleted_at IS NULL',
+        query: "job_id IS NULL AND deleted_at IS NULL AND rescue_status = 'unreviewed'",
       })
     }
 
-    // Create service role client for writes (bypass RLS)
-    const serviceClient = createServiceClient()
-
-    // Ensure we have an array (Supabase returns null when no results)
-    return processAndSave(finalPhotos, scan_id, scopeMode, organization_id, user_id, serviceClient, isDev ? debugStage : 0)
+    // Process photos and compute clusters (stateless, no DB writes)
+    return computeSuggestions(finalPhotos, scopeMode, isDev ? debugStage : 0)
   } catch (error) {
     console.error('[rescue/scan] Unhandled error:', error)
     return NextResponse.json(
@@ -205,15 +194,12 @@ export async function POST(req: Request) {
   }
 }
 
-async function processAndSave(
+/**
+ * Compute suggestions from candidate photos (stateless, no DB writes)
+ */
+function computeSuggestions(
   photos: PhotoRow[],
-  scan_id: string,
   scopeMode: string,
-  organization_id: string,
-  user_id: string,
-  // Service role client for writes (may be null if env not configured)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serviceClient: any | null,
   debugStage: number = 0
 ) {
   // ============================================================
@@ -279,11 +265,13 @@ async function processAndSave(
   }
 
   // ============================================================
-  // Separate photos with/without GPS
+  // v1 Bucket 分类 (只有2个bucket)
   // ============================================================
+  // clusters = 有 GPS → geohash + time 聚类
+  // unknown  = 缺 GPS (包括有/无 taken_at)
 
   const withGpsPhotos = photos.filter(p => p.temp_lat != null && p.temp_lng != null)
-  const withoutGpsPhotos = photos.filter(p => p.temp_lat == null || p.temp_lng == null)
+  const unknownPhotos = photos.filter(p => p.temp_lat == null || p.temp_lng == null)
 
   // ============================================================
   // Cluster by geohash + time
@@ -339,228 +327,42 @@ async function processAndSave(
   // Build stats object
   // ============================================================
 
+  // v1 Stats (match contract)
   const stats = {
     total_candidates: totalCandidates,
-    likely_jobsite: likelyJobsite,
+    cluster_count: clusters.length,
+    unknown_count: unknownPhotos.length,
     with_taken_at: withTakenAt,
     missing_taken_at: missingTakenAt,
     with_gps: withGps,
     missing_gps: missingGps,
-    geocode_success: 0,
-    geocode_failed: 0,
-    cluster_count: clusters.length,
-    unknown_count: withoutGpsPhotos.length,
   }
 
-  const unknownPhotoIds = withoutGpsPhotos.map(p => p.id)
+  const unknownPhotoIds = unknownPhotos.map(p => p.id)
 
   // ============================================================
-  // DEBUG STAGE 3: 返回 stats + clusters（不写 DB）
-  // 用于验证：聚类是否正常
+  // DEBUG STAGE 3: 返回 stats + clusters（验证聚类逻辑）
   // ============================================================
   if (debugStage === 3) {
     return NextResponse.json({
       debug_stage: 3,
       debug_checkpoint: 'clustering_done',
-      scan_id,
       stats,
-      date_range: {
-        min: dateRangeMin,
-        max: dateRangeMax,
-        basis: dateRangeBasis,
-      },
-      clusters: clusters.map(c => ({
-        cluster_id: c.cluster_id,
-        photo_count: c.photo_count,
-        geohash: c.geohash,
-        centroid: {
-          lat: c.centroid_lat,
-          lng: c.centroid_lng,
-          accuracy_m: c.centroid_accuracy_m,
-        },
-        time_range: {
-          min: c.time_min,
-          max: c.time_max,
-        },
-      })),
-      unknown: {
-        photo_count: unknownPhotoIds.length,
-        reasons: ['missing_gps'],
-      },
-      _note: 'DB write skipped in debug_stage=3',
+      date_range: { min: dateRangeMin, max: dateRangeMax, basis: dateRangeBasis },
+      cluster_count: clusters.length,
+      unknown_count: unknownPhotoIds.length,
     })
   }
 
   // ============================================================
-  // Best-effort 非事务写入: rescue_scans → rescue_clusters → rescue_unknown
-  // 🚨 绝对禁止因 DB 写入失败而 500
-  // 🚨 失败时进入 stateless mode (scan_id = null)
+  // v1 Response Contract (stateless-first, compute only)
+  // - No DB writes in scan
+  // - stateless: true always
+  // - photo_ids included for confirm/skip
   // ============================================================
-
-  let dbWriteResult: {
-    success: boolean
-    rescue_scans: { success: boolean; error: string | null }
-    rescue_clusters: { success: boolean; error: string | null; count: number }
-    rescue_unknown: { success: boolean; error: string | null }
-    used_fallback_table: boolean
-  } | null = null
-
-  // 只有 serviceClient 可用时才尝试写入
-  if (serviceClient) {
-    dbWriteResult = {
-      success: false,
-      rescue_scans: { success: false, error: null },
-      rescue_clusters: { success: false, error: null, count: 0 },
-      rescue_unknown: { success: false, error: null },
-      used_fallback_table: false,
-    }
-
-    // ---- 1. rescue_scans (try new table, fallback to old) ----
-    try {
-      const { error: scanError } = await serviceClient
-        .from('rescue_scans')
-        .insert({
-          id: scan_id,
-          organization_id,
-          created_by: user_id,
-          scope_mode: scopeMode,
-          stats_json: stats,
-          date_range_min: dateRangeMin,
-          date_range_max: dateRangeMax,
-          date_range_basis: dateRangeBasis,
-          status: 'active',
-        })
-
-      if (scanError) {
-        console.warn('[rescue.scan] rescue_scans insert failed, trying fallback:', scanError.message)
-        dbWriteResult.rescue_scans.error = scanError.message
-
-        // Fallback: 旧表 rescue_scan_sessions
-        try {
-          const { error: fallbackError } = await serviceClient
-            .from('rescue_scan_sessions')
-            .insert({
-              id: scan_id,
-              organization_id,
-              user_id,
-              scope_mode: scopeMode,
-              stats,
-              date_range: { min: dateRangeMin, max: dateRangeMax, basis: dateRangeBasis },
-              clusters: clusters.map(c => ({
-                cluster_id: c.cluster_id,
-                photo_ids: c.photo_ids,
-                photo_count: c.photo_count,
-                centroid: { lat: c.centroid_lat, lng: c.centroid_lng, accuracy_m: c.centroid_accuracy_m },
-                time_range: { min: c.time_min, max: c.time_max },
-                geohash: c.geohash,
-                address: null,
-              })),
-              unknown_photo_ids: unknownPhotoIds,
-              status: 'active',
-            })
-
-          if (fallbackError) {
-            console.error('[rescue.scan] fallback table also failed:', fallbackError.message)
-            dbWriteResult.rescue_scans.error = `new: ${scanError.message}, old: ${fallbackError.message}`
-          } else {
-            dbWriteResult.rescue_scans.success = true
-            dbWriteResult.used_fallback_table = true
-          }
-        } catch (e) {
-          console.error('[rescue.scan] fallback insert threw:', e)
-        }
-      } else {
-        dbWriteResult.rescue_scans.success = true
-      }
-    } catch (e) {
-      console.error('[rescue.scan] rescue_scans threw:', e)
-      dbWriteResult.rescue_scans.error = e instanceof Error ? e.message : 'Unknown error'
-    }
-
-    // ---- 2. rescue_clusters (independent, best-effort) ----
-    // 只有主表写入成功才写 clusters
-    if (dbWriteResult.rescue_scans.success && !dbWriteResult.used_fallback_table && clusters.length > 0) {
-      try {
-        const clusterRows = clusters.map(c => ({
-          id: c.cluster_id,
-          scan_id,
-          organization_id,
-          photo_ids: c.photo_ids,
-          photo_count: c.photo_count,
-          centroid_lat: c.centroid_lat,
-          centroid_lng: c.centroid_lng,
-          centroid_accuracy_m: c.centroid_accuracy_m,
-          geohash: c.geohash,
-          time_min: c.time_min,
-          time_max: c.time_max,
-          status: 'unreviewed',
-        }))
-
-        const { error: clustersError } = await serviceClient
-          .from('rescue_clusters')
-          .insert(clusterRows)
-
-        if (clustersError) {
-          console.error('[rescue.scan] rescue_clusters insert failed:', clustersError.message)
-          dbWriteResult.rescue_clusters.error = clustersError.message
-        } else {
-          dbWriteResult.rescue_clusters.success = true
-          dbWriteResult.rescue_clusters.count = clusters.length
-        }
-      } catch (e) {
-        console.error('[rescue.scan] rescue_clusters threw:', e)
-        dbWriteResult.rescue_clusters.error = e instanceof Error ? e.message : 'Unknown error'
-      }
-    } else if (clusters.length === 0) {
-      dbWriteResult.rescue_clusters.success = true
-      dbWriteResult.rescue_clusters.count = 0
-    }
-
-    // ---- 3. rescue_unknown (independent, best-effort) ----
-    // 只有主表写入成功才写 unknown
-    if (dbWriteResult.rescue_scans.success && !dbWriteResult.used_fallback_table && unknownPhotoIds.length > 0) {
-      try {
-        const { error: unknownError } = await serviceClient
-          .from('rescue_unknown')
-          .insert({
-            scan_id,
-            organization_id,
-            photo_ids: unknownPhotoIds,
-            photo_count: unknownPhotoIds.length,
-          })
-
-        if (unknownError) {
-          console.error('[rescue.scan] rescue_unknown insert failed:', unknownError.message)
-          dbWriteResult.rescue_unknown.error = unknownError.message
-        } else {
-          dbWriteResult.rescue_unknown.success = true
-        }
-      } catch (e) {
-        console.error('[rescue.scan] rescue_unknown threw:', e)
-        dbWriteResult.rescue_unknown.error = e instanceof Error ? e.message : 'Unknown error'
-      }
-    } else if (unknownPhotoIds.length === 0) {
-      dbWriteResult.rescue_unknown.success = true
-    }
-
-    // 总体成功判断
-    dbWriteResult.success = dbWriteResult.rescue_scans.success
-  } else {
-    console.warn('[rescue.scan] No service client available, entering stateless mode')
-  }
-
-  // ============================================================
-  // 返回响应
-  // 🚨 核心：scan_id = null 当 DB 写入失败 (stateless mode)
-  // UI 看到 scan_id = null 时，不显示 "Apply"，只允许手动 confirm
-  // ============================================================
-
-  const dbWriteSuccess = dbWriteResult?.success ?? false
-  const finalScanId = dbWriteSuccess ? scan_id : null
 
   return NextResponse.json({
-    // scan_id: null = stateless mode (DB 写入失败)
-    scan_id: finalScanId,
+    stateless: true,
     scope: { mode: scopeMode },
     stats,
     date_range: {
@@ -570,26 +372,21 @@ async function processAndSave(
     },
     clusters: clusters.map(c => ({
       cluster_id: c.cluster_id,
-      photo_count: c.photo_count,
-      centroid: {
+      suggested_job: {
+        name: `Job (${c.photo_count} photos)`,
+        address: null,
         lat: c.centroid_lat,
         lng: c.centroid_lng,
-        accuracy_m: c.centroid_accuracy_m,
       },
-      address: null,
-      time_range: {
-        min: c.time_min,
-        max: c.time_max,
-      },
+      photo_ids: c.photo_ids,
+      photo_count: c.photo_count,
+      reasons: ['gps_cluster', 'time_cohesion'],
     })),
     unknown: {
+      photo_ids: unknownPhotoIds,
       photo_count: unknownPhotoIds.length,
       reasons: ['missing_gps'],
     },
-    // stateless mode 标记
-    stateless: !dbWriteSuccess,
-    // 只在 dev 环境返回 DB 写入诊断信息
-    ...(process.env.NODE_ENV !== 'production' ? { _db_write: dbWriteResult } : {}),
   })
 }
 

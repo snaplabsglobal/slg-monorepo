@@ -27,7 +27,7 @@ const navItems = [
     icon: Camera,
   },
   {
-    href: '/rescue/organizer',
+    href: '/rescue',
     label: 'Rescue Mode',
     icon: Shield,
   },
@@ -45,8 +45,8 @@ export function Sidebar() {
     if (href === '/jobs') {
       return pathname === '/jobs' || pathname.startsWith('/jobs/')
     }
-    if (href === '/rescue/organizer') {
-      return pathname.startsWith('/rescue')
+    if (href === '/rescue') {
+      return pathname === '/rescue' || pathname.startsWith('/rescue/')
     }
     return pathname === href
   }
