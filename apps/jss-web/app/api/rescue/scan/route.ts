@@ -90,6 +90,8 @@ function encodeGeohash(lat: number, lng: number, precision = 7): string {
 // 60 days in milliseconds
 const MAX_TIME_SPAN_MS = 60 * 24 * 60 * 60 * 1000
 
+// NOTE: Rescue v1 must not depend on ai_classification column.
+// AI-based filtering is optional and should be feature-flagged.
 type PhotoRow = {
   id: string
   temp_lat: number | null
@@ -97,7 +99,6 @@ type PhotoRow = {
   temp_accuracy_m: number | null
   taken_at: string | null
   created_at: string
-  ai_classification: string | null
 }
 
 type ClusterData = {
@@ -154,9 +155,11 @@ export async function POST(req: Request) {
     // ONLY: job_id IS NULL AND rescue_status = 'unreviewed'
     // ============================================================
 
+    // NOTE: Rescue v1 does not filter by ai_classification.
+    // All unassigned photos are candidates for rescue suggestions.
     const { data: photos, error: queryError } = await supabase
       .from('job_photos')
-      .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at, ai_classification')
+      .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
       .is('job_id', null)
@@ -171,7 +174,7 @@ export async function POST(req: Request) {
       // Try without rescue_status filter (migration may not be applied)
       const { data: fallbackPhotos, error: fallbackError } = await supabase
         .from('job_photos')
-        .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at, ai_classification')
+        .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
         .eq('organization_id', organization_id)
         .is('deleted_at', null)
         .is('job_id', null)
@@ -242,7 +245,10 @@ async function processAndSave(
   const missingTakenAt = totalCandidates - withTakenAt
   const withGps = photos.filter(p => p.temp_lat != null && p.temp_lng != null).length
   const missingGps = totalCandidates - withGps
-  const likelyJobsite = photos.filter(p => p.ai_classification === 'jobsite').length
+  // NOTE: Rescue v1 does not use AI classification for filtering.
+  // All candidates are treated as potentially jobsite photos.
+  // AI-based filtering can be added as a feature flag in v2.
+  const likelyJobsite = totalCandidates
 
   // Date range - 优先使用 taken_at，fallback 到 created_at
   const takenAtDates = photos
