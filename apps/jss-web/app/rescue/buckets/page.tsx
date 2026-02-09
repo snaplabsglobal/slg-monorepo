@@ -309,13 +309,13 @@ export default function BucketsPage() {
         <BucketCard
           type="unknownLocation"
           count={missingBuckets.unknownLocation.count}
-          onOpen={() => router.push('/rescue/buckets/bucket_unlocated')}
+          onOpen={() => router.push('/rescue/review/unknownLocation')}
         />
 
         <BucketCard
           type="geocodeFailed"
           count={missingBuckets.geocodeFailed?.count ?? 0}
-          onOpen={() => alert('Open: Address unresolved review')}
+          onOpen={() => router.push('/rescue/review/geocodeFailed')}
           secondaryAction={{
             label: 'Retry lookup',
             onClick: () => alert('Retry geocode'),
@@ -325,13 +325,13 @@ export default function BucketsPage() {
         <BucketCard
           type="likelyPersonal"
           count={missingBuckets.likelyPersonal?.count ?? 0}
-          onOpen={() => alert('Open: Likely personal')}
+          onOpen={() => router.push('/rescue/review/likelyPersonal')}
         />
 
         <BucketCard
           type="unsure"
           count={missingBuckets.unsure?.count ?? 0}
-          onOpen={() => alert('Open: Unsure review')}
+          onOpen={() => router.push('/rescue/review/unsure')}
         />
       </div>
 
