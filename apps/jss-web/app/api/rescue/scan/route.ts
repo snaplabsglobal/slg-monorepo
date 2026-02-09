@@ -157,6 +157,16 @@ export async function POST(req: Request) {
 
     // NOTE: Rescue v1 does not filter by ai_classification.
     // All unassigned photos are candidates for rescue suggestions.
+    //
+    // 查询策略 (3 层 fallback):
+    // 1. rescue_status = 'unreviewed' (理想情况)
+    // 2. rescue_status IS NULL OR rescue_status = '' (历史数据)
+    // 3. 无 rescue_status 过滤 (列不存在)
+
+    let finalPhotos: PhotoRow[] = []
+    let usedFallback = ''
+
+    // ---- 尝试 1: rescue_status = 'unreviewed' ----
     const { data: photos, error: queryError } = await supabase
       .from('job_photos')
       .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
@@ -167,11 +177,12 @@ export async function POST(req: Request) {
       .order('taken_at', { ascending: true, nullsFirst: false })
       .limit(10000)
 
-    let finalPhotos: PhotoRow[] = []
-    let usedFallback = false
-
-    if (queryError) {
-      // Try without rescue_status filter (migration may not be applied)
+    if (!queryError && photos && photos.length > 0) {
+      finalPhotos = photos as PhotoRow[]
+      usedFallback = 'none'
+    } else if (queryError) {
+      // ---- 尝试 3: 无 rescue_status 过滤 (列可能不存在) ----
+      console.warn('[rescue/scan] rescue_status query failed, trying without filter:', queryError.message)
       const { data: fallbackPhotos, error: fallbackError } = await supabase
         .from('job_photos')
         .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
@@ -191,9 +202,48 @@ export async function POST(req: Request) {
       }
 
       finalPhotos = (fallbackPhotos || []) as PhotoRow[]
-      usedFallback = true
+      usedFallback = 'no_rescue_status_column'
     } else {
-      finalPhotos = (photos || []) as PhotoRow[]
+      // ---- 尝试 2: rescue_status IS NULL (历史数据，列存在但值为空) ----
+      // 查询成功但返回 0 条，可能是因为 rescue_status 是 NULL 而不是 'unreviewed'
+      console.warn('[rescue/scan] rescue_status=unreviewed returned 0, trying NULL fallback')
+      const { data: nullStatusPhotos, error: nullError } = await supabase
+        .from('job_photos')
+        .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .is('job_id', null)
+        .or('rescue_status.is.null,rescue_status.eq.')  // NULL or empty string
+        .order('taken_at', { ascending: true, nullsFirst: false })
+        .limit(10000)
+
+      if (nullError) {
+        // 如果这个也失败，直接用无过滤的 fallback
+        console.warn('[rescue/scan] NULL fallback failed, trying no filter:', nullError.message)
+        const { data: noFilterPhotos, error: noFilterError } = await supabase
+          .from('job_photos')
+          .select('id, temp_lat, temp_lng, temp_accuracy_m, taken_at, created_at')
+          .eq('organization_id', organization_id)
+          .is('deleted_at', null)
+          .is('job_id', null)
+          .order('taken_at', { ascending: true, nullsFirst: false })
+          .limit(10000)
+
+        if (noFilterError) {
+          return NextResponse.json({
+            error: 'scan_failed',
+            message: noFilterError.message,
+            debug_stage: isDev ? debugStage : undefined,
+            debug_checkpoint: isDev ? 'db_query_failed' : undefined,
+          }, { status: 500 })
+        }
+
+        finalPhotos = (noFilterPhotos || []) as PhotoRow[]
+        usedFallback = 'no_filter'
+      } else {
+        finalPhotos = (nullStatusPhotos || []) as PhotoRow[]
+        usedFallback = 'rescue_status_null'
+      }
     }
 
     // ============================================================
@@ -206,7 +256,12 @@ export async function POST(req: Request) {
         debug_checkpoint: 'db_query_ok',
         total_candidates: finalPhotos.length,
         used_fallback: usedFallback,
-        query_error: queryError?.message || null,
+        fallback_explanation: {
+          none: 'rescue_status=unreviewed worked',
+          rescue_status_null: 'rescue_status was NULL/empty, need migration',
+          no_rescue_status_column: 'rescue_status column may not exist',
+          no_filter: 'all filters failed, using job_id IS NULL only',
+        }[usedFallback] || 'unknown',
       })
     }
 
