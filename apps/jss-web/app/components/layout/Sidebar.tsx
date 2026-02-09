@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Folder, Camera, Sparkles, Settings } from 'lucide-react'
+import { Folder, Camera, Shield, Settings } from 'lucide-react'
 import { JSSLogo } from '@/components/ui/JSSLogo'
 
 /**
@@ -10,7 +10,7 @@ import { JSSLogo } from '@/components/ui/JSSLogo'
  *
  * 规范来源: 260207_JSS_UI最终规范文档_Manus对齐版.md
  *
- * 菜单顺序(不可改): Jobs → Camera → Photo Organizer → Settings
+ * 菜单顺序(不可改): Jobs → Camera → Rescue Mode → Settings
  * Active Item: 背景rgb(245,158,11), 文字白色
  * 底部: 用户信息(头像+名字+角色), Logout在Settings页面内
  */
@@ -28,8 +28,8 @@ const navItems = [
   },
   {
     href: '/organizer',
-    label: 'Photo Organizer',
-    icon: Sparkles,
+    label: 'Rescue Mode',
+    icon: Shield,
   },
   {
     href: '/settings',
@@ -46,7 +46,7 @@ export function Sidebar() {
       return pathname === '/jobs' || pathname.startsWith('/jobs/')
     }
     if (href === '/organizer') {
-      return pathname === '/organizer' || pathname.startsWith('/organizer/')
+      return pathname === '/organizer' || pathname.startsWith('/organizer/') || pathname.startsWith('/rescue')
     }
     return pathname === href
   }
