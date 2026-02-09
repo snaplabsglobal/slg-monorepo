@@ -1,0 +1,9 @@
+# docs 分支 CODEOWNERS
+# 用于 GitHub Branch Protection 规则
+
+# 宪法级文件 - 必须 PR + Review
+/docs/00-current/JSS_CONSTITUTION.md @pxjiang
+/docs/00-current/JSS_CAMERA_STATE_MACHINE.md @pxjiang
+
+# 所有 00-current 目录的文件都需要 review
+/docs/00-current/ @pxjiang
