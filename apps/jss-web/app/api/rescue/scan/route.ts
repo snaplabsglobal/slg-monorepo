@@ -15,6 +15,14 @@
  * - date_range basis: min/max(taken_at) 或 fallback
  * - cluster photo_count 用 array_length(photo_ids)
  * - unknown_count 必须来自 missing_gps 子集
+ *
+ * DEBUG MODE (dev only):
+ * ?debug_stage=1 → 只查候选 photo count，直接 return { total_candidates }
+ * ?debug_stage=2 → 加上 stats + date_range
+ * ?debug_stage=3 → 加上 cluster + geocode（不写 DB）
+ * 无参数或其他值 → 完整流程（含 DB 写入）
+ *
+ * 用于快速定位：是 DB 查询炸？聚类炸？geocode 炸？还是 insert 炸？
  */
 
 import { NextResponse } from 'next/server'
@@ -95,6 +103,14 @@ type ClusterData = {
 
 export async function POST(req: Request) {
   try {
+    // ============================================================
+    // DEBUG MODE (dev only): ?debug_stage=1|2|3
+    // ============================================================
+    const url = new URL(req.url)
+    const debugStageParam = url.searchParams.get('debug_stage')
+    const debugStage = debugStageParam ? parseInt(debugStageParam, 10) : 0
+    const isDev = process.env.NODE_ENV !== 'production'
+
     // A. requireSessionOrg
     const auth = await getSessionOrUnauthorized()
     if (!auth.ok) return auth.response
@@ -137,6 +153,9 @@ export async function POST(req: Request) {
       .order('taken_at', { ascending: true, nullsFirst: false })
       .limit(10000)
 
+    let finalPhotos: PhotoRow[] = []
+    let usedFallback = false
+
     if (queryError) {
       // Try without rescue_status filter (migration may not be applied)
       const { data: fallbackPhotos, error: fallbackError } = await supabase
@@ -149,15 +168,36 @@ export async function POST(req: Request) {
         .limit(10000)
 
       if (fallbackError) {
-        return NextResponse.json({ error: 'scan_failed', message: fallbackError.message }, { status: 500 })
+        return NextResponse.json({
+          error: 'scan_failed',
+          message: fallbackError.message,
+          debug_stage: isDev ? debugStage : undefined,
+          debug_checkpoint: isDev ? 'db_query_failed' : undefined,
+        }, { status: 500 })
       }
 
-      // Ensure we have an array (Supabase returns null when no results)
-      return processAndSave((fallbackPhotos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+      finalPhotos = (fallbackPhotos || []) as PhotoRow[]
+      usedFallback = true
+    } else {
+      finalPhotos = (photos || []) as PhotoRow[]
+    }
+
+    // ============================================================
+    // DEBUG STAGE 1: 只返回候选照片数量
+    // 用于验证：DB 连接 + job_photos 查询是否正常
+    // ============================================================
+    if (isDev && debugStage === 1) {
+      return NextResponse.json({
+        debug_stage: 1,
+        debug_checkpoint: 'db_query_ok',
+        total_candidates: finalPhotos.length,
+        used_fallback: usedFallback,
+        query_error: queryError?.message || null,
+      })
     }
 
     // Ensure we have an array (Supabase returns null when no results)
-    return processAndSave((photos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+    return processAndSave(finalPhotos, scan_id, scopeMode, organization_id, user_id, supabase, isDev ? debugStage : 0)
   } catch (error) {
     console.error('[rescue/scan] Unhandled error:', error)
     return NextResponse.json(
@@ -174,7 +214,8 @@ async function processAndSave(
   organization_id: string,
   user_id: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
+  supabase: any,
+  debugStage: number = 0
 ) {
   // ============================================================
   // Compute stats (MUST be returned for transparency)
@@ -208,6 +249,31 @@ async function processAndSave(
     dateRangeBasis = 'created_at_fallback'
     dateRangeMin = allDates[0]
     dateRangeMax = allDates[allDates.length - 1]
+  }
+
+  // ============================================================
+  // DEBUG STAGE 2: 返回 stats + date_range（不做聚类）
+  // 用于验证：stats 计算是否正常
+  // ============================================================
+  if (debugStage === 2) {
+    return NextResponse.json({
+      debug_stage: 2,
+      debug_checkpoint: 'stats_computed',
+      total_candidates: totalCandidates,
+      stats: {
+        total_candidates: totalCandidates,
+        likely_jobsite: likelyJobsite,
+        with_taken_at: withTakenAt,
+        missing_taken_at: missingTakenAt,
+        with_gps: withGps,
+        missing_gps: missingGps,
+      },
+      date_range: {
+        min: dateRangeMin,
+        max: dateRangeMax,
+        basis: dateRangeBasis,
+      },
+    })
   }
 
   // ============================================================
@@ -287,8 +353,52 @@ async function processAndSave(
   const unknownPhotoIds = withoutGpsPhotos.map(p => p.id)
 
   // ============================================================
+  // DEBUG STAGE 3: 返回 stats + clusters（不写 DB）
+  // 用于验证：聚类是否正常
+  // ============================================================
+  if (debugStage === 3) {
+    return NextResponse.json({
+      debug_stage: 3,
+      debug_checkpoint: 'clustering_done',
+      scan_id,
+      stats,
+      date_range: {
+        min: dateRangeMin,
+        max: dateRangeMax,
+        basis: dateRangeBasis,
+      },
+      clusters: clusters.map(c => ({
+        cluster_id: c.cluster_id,
+        photo_count: c.photo_count,
+        geohash: c.geohash,
+        centroid: {
+          lat: c.centroid_lat,
+          lng: c.centroid_lng,
+          accuracy_m: c.centroid_accuracy_m,
+        },
+        time_range: {
+          min: c.time_min,
+          max: c.time_max,
+        },
+      })),
+      unknown: {
+        photo_count: unknownPhotoIds.length,
+        reasons: ['missing_gps'],
+      },
+      _note: 'DB write skipped in debug_stage=3',
+    })
+  }
+
+  // ============================================================
   // 原子写入: rescue_scans + rescue_clusters + rescue_unknown
   // ============================================================
+
+  let dbWriteResult = {
+    rescue_scans: { success: false, error: null as string | null },
+    rescue_clusters: { success: false, error: null as string | null, count: 0 },
+    rescue_unknown: { success: false, error: null as string | null },
+    used_fallback_table: false,
+  }
 
   try {
     // 1. 写入 scan (尝试新表，fallback 到旧表)
@@ -309,6 +419,8 @@ async function processAndSave(
     if (scanError) {
       // Fallback: 尝试旧表 rescue_scan_sessions
       console.warn('rescue_scans insert failed, trying rescue_scan_sessions:', scanError.message)
+      dbWriteResult.rescue_scans.error = scanError.message
+
       const { error: fallbackScanError } = await supabase
         .from('rescue_scan_sessions')
         .insert({
@@ -333,8 +445,14 @@ async function processAndSave(
 
       if (fallbackScanError) {
         console.error('Failed to save scan session (both tables):', fallbackScanError)
+        dbWriteResult.rescue_scans.error = `new: ${scanError.message}, old: ${fallbackScanError.message}`
+      } else {
+        dbWriteResult.rescue_scans.success = true
+        dbWriteResult.used_fallback_table = true
       }
     } else {
+      dbWriteResult.rescue_scans.success = true
+
       // 2. 写入 clusters
       if (clusters.length > 0) {
         const clusterRows = clusters.map(c => ({
@@ -358,7 +476,14 @@ async function processAndSave(
 
         if (clustersError) {
           console.error('Failed to save clusters:', clustersError)
+          dbWriteResult.rescue_clusters.error = clustersError.message
+        } else {
+          dbWriteResult.rescue_clusters.success = true
+          dbWriteResult.rescue_clusters.count = clusters.length
         }
+      } else {
+        dbWriteResult.rescue_clusters.success = true
+        dbWriteResult.rescue_clusters.count = 0
       }
 
       // 3. 写入 unknown
@@ -374,12 +499,17 @@ async function processAndSave(
 
         if (unknownError) {
           console.error('Failed to save unknown:', unknownError)
+          dbWriteResult.rescue_unknown.error = unknownError.message
+        } else {
+          dbWriteResult.rescue_unknown.success = true
         }
+      } else {
+        dbWriteResult.rescue_unknown.success = true
       }
     }
   } catch (e) {
     console.error('Failed to save scan session:', e)
-    // Continue anyway - return computed results
+    dbWriteResult.rescue_scans.error = e instanceof Error ? e.message : 'Unknown error'
   }
 
   // ============================================================
@@ -413,6 +543,8 @@ async function processAndSave(
       photo_count: unknownPhotoIds.length,
       reasons: ['missing_gps'],
     },
+    // 只在 dev 环境返回 DB 写入诊断信息
+    ...(process.env.NODE_ENV !== 'production' ? { _db_write: dbWriteResult } : {}),
   })
 }
 
