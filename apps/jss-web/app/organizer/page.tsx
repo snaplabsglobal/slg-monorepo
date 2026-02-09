@@ -13,12 +13,24 @@
  * - Not a feature page, but a "system safety valve"
  * - 90% of the time should show "All good"
  * - Only appears when system needs help
+ *
+ * Flow improvement:
+ * - Shows Scope Strip when user has selected a scope
+ * - Shows progress summary
+ * - Apply button disabled until all items reviewed/skipped
  */
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useEffect, useMemo, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardLayout } from '../components/layout'
-import { Shield } from 'lucide-react'
+import { Shield, Settings2 } from 'lucide-react'
+
+const SCOPE_LABELS: Record<string, string> = {
+  unassigned: 'Unassigned photos',
+  all: 'All photos',
+  no_location: 'Photos without location',
+  date_range: 'Custom date range',
+}
 
 type RescueSummaryResponse = {
   sampled: boolean
@@ -53,6 +65,67 @@ async function fetchRescueSummary(): Promise<RescueSummaryResponse> {
   return res.json()
 }
 
+/**
+ * Scope Strip - shows current scan scope with change option
+ */
+function ScopeStrip({
+  scope,
+  onChangeScope,
+}: {
+  scope: string
+  onChangeScope: () => void
+}) {
+  const label = SCOPE_LABELS[scope] || scope
+
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <div className="text-sm">
+        <span className="text-gray-600">Scan scope:</span>{' '}
+        <span className="font-semibold text-gray-900">{label}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onChangeScope}
+        className="flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700"
+      >
+        <Settings2 className="h-4 w-4" />
+        Change
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Progress Summary - shows review progress
+ */
+function ProgressSummary({
+  totalNeedsReview,
+  reviewedCount,
+}: {
+  totalNeedsReview: number
+  reviewedCount: number
+}) {
+  const remaining = totalNeedsReview - reviewedCount
+  const allDone = remaining === 0
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      {allDone ? (
+        <div className="font-semibold text-green-600">
+          ✓ You&apos;re ready to apply your changes
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="text-sm text-gray-600">Remaining to review:</div>
+          <div className="font-semibold text-gray-900">
+            {remaining.toLocaleString()} photos
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BucketRow({
   label,
   count,
@@ -76,12 +149,17 @@ function BucketRow({
   )
 }
 
-export default function RescueModePage() {
+function RescueModeContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const scope = searchParams.get('scope') // null if not set
 
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [data, setData] = useState<RescueSummaryResponse | null>(null)
+
+  // Track reviewed items (in real app, this would come from API)
+  const [reviewedCount, setReviewedCount] = useState(0)
 
   // Brief "just completed" state
   const [resolvedFlash, setResolvedFlash] = useState(false)
@@ -107,7 +185,7 @@ export default function RescueModePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [scope])
 
   // Calculate: any items needing attention?
   const hasRescueItems = useMemo(() => {
@@ -301,6 +379,20 @@ export default function RescueModePage() {
         {/* State: ACTIVE */}
         {pageState === 'active' && (
           <div className="space-y-4">
+            {/* Scope Strip - shows when scope is set */}
+            {scope && (
+              <ScopeStrip
+                scope={scope}
+                onChangeScope={() => router.push('/rescue/setup')}
+              />
+            )}
+
+            {/* Progress Summary */}
+            <ProgressSummary
+              totalNeedsReview={totalNeedsReview}
+              reviewedCount={reviewedCount}
+            />
+
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="text-sm text-gray-500">Needs review</div>
               <div className="mt-1 text-2xl font-semibold text-gray-900">
@@ -346,6 +438,14 @@ export default function RescueModePage() {
                 When you&apos;re done reviewing, you can exit Rescue Mode.
               </div>
 
+              {/* Warning when items still need review */}
+              {totalNeedsReview > reviewedCount && (
+                <div className="mt-3 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-900">
+                  ⚠️ You still have {(totalNeedsReview - reviewedCount).toLocaleString()} photos that need review.
+                  Please review or skip them before applying.
+                </div>
+              )}
+
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
                   className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -354,8 +454,13 @@ export default function RescueModePage() {
                   Go to Jobs
                 </button>
                 <button
-                  className="rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white hover:bg-black"
+                  className={`rounded-xl px-4 py-3 text-sm font-semibold ${
+                    totalNeedsReview <= reviewedCount
+                      ? 'bg-gray-900 text-white hover:bg-black'
+                      : 'cursor-not-allowed bg-gray-200 text-gray-400'
+                  }`}
                   onClick={onApplyAndExit}
+                  disabled={totalNeedsReview > reviewedCount}
                 >
                   Apply & Exit
                 </button>
@@ -365,5 +470,31 @@ export default function RescueModePage() {
         )}
       </main>
     </DashboardLayout>
+  )
+}
+
+export default function RescueModePage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <main className="mx-auto max-w-2xl p-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-amber-100 p-2">
+                <Shield className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Rescue Mode
+                </h1>
+                <p className="mt-0.5 text-sm text-gray-500">Loading…</p>
+              </div>
+            </div>
+          </main>
+        </DashboardLayout>
+      }
+    >
+      <RescueModeContent />
+    </Suspense>
   )
 }
