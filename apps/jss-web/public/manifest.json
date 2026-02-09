@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "com.jobsitesnap.pwa",
   "name": "JobSite Snap",
   "short_name": "JSS",
   "description": "Job site photo management for contractors. Capture, organize, find—in seconds.",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard?utm_source=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
