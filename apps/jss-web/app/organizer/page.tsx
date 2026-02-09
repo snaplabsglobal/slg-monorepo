@@ -75,8 +75,12 @@ type ScanResponse = {
 
 type ProgressResponse = {
   scan_id: string
+  stateless?: boolean
   remaining: { clusters_unreviewed: number; unknown_unreviewed: number }
+  processed?: { clusters_confirmed: number; clusters_skipped: number; unknown_assigned: number; unknown_skipped: number }
+  totals?: { clusters: number; unknown: number }
   done: boolean
+  status?: string
 }
 
 // ============================================================
@@ -106,7 +110,19 @@ async function getScan(scanId: string): Promise<ScanResponse> {
   return res.json()
 }
 
-async function getProgress(scanId: string): Promise<ProgressResponse> {
+async function getProgress(scanId: string | null | undefined): Promise<ProgressResponse> {
+  // P0 guard: stateless/null scanId has no progress endpoint
+  if (!scanId || scanId === 'null' || scanId === 'undefined') {
+    return {
+      scan_id: 'stateless',
+      stateless: true,
+      remaining: { clusters_unreviewed: 0, unknown_unreviewed: 0 },
+      processed: { clusters_confirmed: 0, clusters_skipped: 0, unknown_assigned: 0, unknown_skipped: 0 },
+      totals: { clusters: 0, unknown: 0 },
+      done: true,
+      status: 'stateless',
+    }
+  }
   const res = await fetch(`/api/rescue/scan/${scanId}/progress`)
   if (!res.ok) throw new Error('Failed to load progress')
   return res.json()

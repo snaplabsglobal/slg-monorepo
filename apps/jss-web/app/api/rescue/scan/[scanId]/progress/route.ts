@@ -26,9 +26,10 @@ export async function GET(
   const { scanId } = await params
 
   // ============================================================
-  // Stateless Mode: scan_id = "stateless" → done: true
+  // P0 Guard: Invalid scanId → return stateless done: true
+  // Handles: null, undefined, "null", "undefined", "stateless"
   // ============================================================
-  if (scanId === 'stateless') {
+  if (!scanId || scanId === 'null' || scanId === 'undefined' || scanId === 'stateless') {
     return NextResponse.json({
       scan_id: 'stateless',
       stateless: true,
