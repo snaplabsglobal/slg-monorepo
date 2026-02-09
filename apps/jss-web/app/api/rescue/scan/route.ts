@@ -151,10 +151,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'scan_failed', message: fallbackError.message }, { status: 500 })
     }
 
-    return processAndSave(fallbackPhotos as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+    // Ensure we have an array (Supabase returns null when no results)
+    return processAndSave((fallbackPhotos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
   }
 
-  return processAndSave(photos as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
+  // Ensure we have an array (Supabase returns null when no results)
+  return processAndSave((photos || []) as PhotoRow[], scan_id, scopeMode, organization_id, user_id, supabase)
 }
 
 async function processAndSave(
