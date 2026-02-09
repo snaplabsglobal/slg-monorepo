@@ -181,7 +181,7 @@ export default function RescueSetupPage() {
         </button>
         <button
           type="button"
-          onClick={() => router.push('/organizer')}
+          onClick={() => router.push('/rescue/organizer')}
           className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
           Cancel

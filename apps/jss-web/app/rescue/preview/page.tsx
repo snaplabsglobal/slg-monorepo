@@ -63,7 +63,7 @@ function PreviewContent() {
 
   function handleStartScan() {
     // Navigate to organizer with scope parameter
-    router.push(`/organizer?scope=${scope}`)
+    router.push(`/rescue/organizer?scope=${scope}`)
   }
 
   if (loading) {

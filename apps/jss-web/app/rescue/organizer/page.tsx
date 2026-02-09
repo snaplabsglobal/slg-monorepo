@@ -2,7 +2,7 @@
 
 /**
  * Rescue Mode Page (v1 - API Spec Compliant)
- * Route: /organizer
+ * Route: /rescue/organizer
  *
  * Strict State Machine:
  *   'setup' → 'scanning' → 'review' → 'ready_to_apply' → 'applied'
@@ -24,7 +24,7 @@
 
 import React, { useEffect, useState, Suspense, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { DashboardLayout } from '../components/layout'
+import { DashboardLayout } from '../../components/layout'
 import { Shield, Loader2, MapPin, Calendar, Check, X, Info } from 'lucide-react'
 
 // ============================================================
