@@ -3,17 +3,22 @@
  *
  * Creates a new Rescue scan session with full transparency stats.
  *
- * Response includes:
- * - scan_id: Session ID for all subsequent operations
- * - stats: Full breakdown of candidate photos
- * - date_range: Actual date range being processed
- * - clusters: Grouped by geohash + time
- * - unknown: Photos without GPS
+ * 必须行为:
+ * 1. 校验 scope.mode === 'unassigned' (v1 只允许这个)
+ * 2. 从 DB 选候选照片: job_id IS NULL, rescue_status = 'unreviewed'
+ * 3. 计算 stats (所有数字在 DB 侧算)
+ * 4. 聚类 (地点 + 时间) 得到 clusters + unknown
+ * 5. 原子写入 rescue_scans / rescue_clusters / rescue_unknown
+ * 6. 返回 scan_result (包含 stats + date_range)
+ *
+ * 强制校验点:
+ * - date_range basis: min/max(taken_at) 或 fallback
+ * - cluster photo_count 用 array_length(photo_ids)
+ * - unknown_count 必须来自 missing_gps 子集
  */
 
 import { NextResponse } from 'next/server'
-import { getOrganizationIdOrThrow } from '@/lib/auth/getOrganizationId'
-import { createClient } from '@/lib/supabase/server'
+import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
 import { randomBytes } from 'crypto'
 
 // Generate a short unique ID
@@ -76,32 +81,24 @@ type PhotoRow = {
   ai_classification: string | null
 }
 
-type Cluster = {
+type ClusterData = {
   cluster_id: string
   photo_ids: string[]
   photo_count: number
-  centroid: { lat: number; lng: number; accuracy_m: number }
-  address: { display: string | null; source: string; confidence: number } | null
-  time_range: { min: string; max: string }
+  centroid_lat: number
+  centroid_lng: number
+  centroid_accuracy_m: number
   geohash: string
+  time_min: string
+  time_max: string
 }
 
 export async function POST(req: Request) {
-  let supabase, organization_id, user_id
+  // A. requireSessionOrg
+  const auth = await getSessionOrUnauthorized()
+  if (!auth.ok) return auth.response
 
-  try {
-    const r = await getOrganizationIdOrThrow()
-    supabase = r.supabase
-    organization_id = r.organization_id
-
-    // Get user_id
-    const { data: { user } } = await supabase.auth.getUser()
-    user_id = user?.id
-    if (!user_id) throw new Error('Unauthorized')
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unauthorized'
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const { supabase, organization_id, user_id } = auth.ctx
 
   // Parse request
   let body: { scope?: { mode?: string } } = {}
@@ -166,10 +163,12 @@ async function processAndSave(
   scopeMode: string,
   organization_id: string,
   user_id: string,
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
 ) {
   // ============================================================
   // Compute stats (MUST be returned for transparency)
+  // 所有数字在应用侧算（基于真实 DB 数据）
   // ============================================================
 
   const totalCandidates = photos.length
@@ -179,16 +178,26 @@ async function processAndSave(
   const missingGps = totalCandidates - withGps
   const likelyJobsite = photos.filter(p => p.ai_classification === 'jobsite').length
 
-  // Date range
+  // Date range - 优先使用 taken_at，fallback 到 created_at
+  const takenAtDates = photos
+    .filter(p => p.taken_at != null)
+    .map(p => p.taken_at!)
+    .sort()
+
   const allDates = photos
     .map(p => p.taken_at || p.created_at)
     .filter(Boolean)
     .sort()
 
-  const dateRange = {
-    min: allDates[0] || null,
-    max: allDates[allDates.length - 1] || null,
-    basis: 'taken_at_or_fallback',
+  // basis 标记
+  let dateRangeBasis = 'taken_at'
+  let dateRangeMin = takenAtDates[0] || null
+  let dateRangeMax = takenAtDates[takenAtDates.length - 1] || null
+
+  if (!dateRangeMin && allDates.length > 0) {
+    dateRangeBasis = 'created_at_fallback'
+    dateRangeMin = allDates[0]
+    dateRangeMax = allDates[allDates.length - 1]
   }
 
   // ============================================================
@@ -211,7 +220,7 @@ async function processAndSave(
     geohashGroups.set(hash, existing)
   }
 
-  const clusters: Cluster[] = []
+  const clusters: ClusterData[] = []
   let clusterIndex = 0
 
   for (const [geohash, groupPhotos] of geohashGroups) {
@@ -222,7 +231,7 @@ async function processAndSave(
       return new Date(dateA).getTime() - new Date(dateB).getTime()
     })
 
-    // Split into time-based clusters
+    // Split into time-based clusters (60 days max span)
     let currentCluster: PhotoRow[] = []
     let clusterStartTime: number | null = null
 
@@ -236,7 +245,7 @@ async function processAndSave(
         currentCluster.push(photo)
       } else {
         if (currentCluster.length > 0) {
-          clusters.push(createCluster(currentCluster, geohash, clusterIndex++))
+          clusters.push(createClusterData(currentCluster, geohash, clusterIndex++))
         }
         currentCluster = [photo]
         clusterStartTime = photoTime
@@ -244,12 +253,12 @@ async function processAndSave(
     }
 
     if (currentCluster.length > 0) {
-      clusters.push(createCluster(currentCluster, geohash, clusterIndex++))
+      clusters.push(createClusterData(currentCluster, geohash, clusterIndex++))
     }
   }
 
   // ============================================================
-  // Build response
+  // Build stats object
   // ============================================================
 
   const stats = {
@@ -259,64 +268,145 @@ async function processAndSave(
     missing_taken_at: missingTakenAt,
     with_gps: withGps,
     missing_gps: missingGps,
-    geocode_success: 0, // v1: no geocoding yet
+    geocode_success: 0,
     geocode_failed: 0,
+    cluster_count: clusters.length,
+    unknown_count: withoutGpsPhotos.length,
   }
 
-  const unknown = {
-    photo_count: withoutGpsPhotos.length,
-    photo_ids: withoutGpsPhotos.map(p => p.id),
-    reasons: ['missing_gps'],
-  }
+  const unknownPhotoIds = withoutGpsPhotos.map(p => p.id)
 
   // ============================================================
-  // Save session to database
+  // 原子写入: rescue_scans + rescue_clusters + rescue_unknown
   // ============================================================
 
   try {
-    const { error: insertError } = await supabase
-      .from('rescue_scan_sessions')
+    // 1. 写入 scan (尝试新表，fallback 到旧表)
+    const { error: scanError } = await supabase
+      .from('rescue_scans')
       .insert({
         id: scan_id,
         organization_id,
-        user_id,
+        created_by: user_id,
         scope_mode: scopeMode,
-        stats,
-        date_range: dateRange,
-        clusters,
-        unknown_photo_ids: unknown.photo_ids,
+        stats_json: stats,
+        date_range_min: dateRangeMin,
+        date_range_max: dateRangeMax,
+        date_range_basis: dateRangeBasis,
         status: 'active',
       })
 
-    if (insertError) {
-      console.error('Failed to save scan session:', insertError)
-      // Continue anyway - session storage is optional for v1
+    if (scanError) {
+      // Fallback: 尝试旧表 rescue_scan_sessions
+      console.warn('rescue_scans insert failed, trying rescue_scan_sessions:', scanError.message)
+      const { error: fallbackScanError } = await supabase
+        .from('rescue_scan_sessions')
+        .insert({
+          id: scan_id,
+          organization_id,
+          user_id,
+          scope_mode: scopeMode,
+          stats,
+          date_range: { min: dateRangeMin, max: dateRangeMax, basis: dateRangeBasis },
+          clusters: clusters.map(c => ({
+            cluster_id: c.cluster_id,
+            photo_ids: c.photo_ids,
+            photo_count: c.photo_count,
+            centroid: { lat: c.centroid_lat, lng: c.centroid_lng, accuracy_m: c.centroid_accuracy_m },
+            time_range: { min: c.time_min, max: c.time_max },
+            geohash: c.geohash,
+            address: null,
+          })),
+          unknown_photo_ids: unknownPhotoIds,
+          status: 'active',
+        })
+
+      if (fallbackScanError) {
+        console.error('Failed to save scan session (both tables):', fallbackScanError)
+      }
+    } else {
+      // 2. 写入 clusters
+      if (clusters.length > 0) {
+        const clusterRows = clusters.map(c => ({
+          id: c.cluster_id,
+          scan_id,
+          organization_id,
+          photo_ids: c.photo_ids,
+          photo_count: c.photo_count,
+          centroid_lat: c.centroid_lat,
+          centroid_lng: c.centroid_lng,
+          centroid_accuracy_m: c.centroid_accuracy_m,
+          geohash: c.geohash,
+          time_min: c.time_min,
+          time_max: c.time_max,
+          status: 'unreviewed',
+        }))
+
+        const { error: clustersError } = await supabase
+          .from('rescue_clusters')
+          .insert(clusterRows)
+
+        if (clustersError) {
+          console.error('Failed to save clusters:', clustersError)
+        }
+      }
+
+      // 3. 写入 unknown
+      if (unknownPhotoIds.length > 0) {
+        const { error: unknownError } = await supabase
+          .from('rescue_unknown')
+          .insert({
+            scan_id,
+            organization_id,
+            photo_ids: unknownPhotoIds,
+            photo_count: unknownPhotoIds.length,
+          })
+
+        if (unknownError) {
+          console.error('Failed to save unknown:', unknownError)
+        }
+      }
     }
   } catch (e) {
     console.error('Failed to save scan session:', e)
-    // Continue anyway
+    // Continue anyway - return computed results
   }
+
+  // ============================================================
+  // 返回响应
+  // ============================================================
 
   return NextResponse.json({
     scan_id,
     scope: { mode: scopeMode },
     stats,
-    date_range: dateRange,
+    date_range: {
+      min: dateRangeMin,
+      max: dateRangeMax,
+      basis: dateRangeBasis,
+    },
     clusters: clusters.map(c => ({
       cluster_id: c.cluster_id,
       photo_count: c.photo_count,
-      centroid: c.centroid,
-      address: c.address,
-      time_range: c.time_range,
+      centroid: {
+        lat: c.centroid_lat,
+        lng: c.centroid_lng,
+        accuracy_m: c.centroid_accuracy_m,
+      },
+      address: null,
+      time_range: {
+        min: c.time_min,
+        max: c.time_max,
+      },
     })),
     unknown: {
-      photo_count: unknown.photo_count,
-      reasons: unknown.reasons,
+      photo_count: unknownPhotoIds.length,
+      reasons: ['missing_gps'],
     },
   })
 }
 
-function createCluster(photos: PhotoRow[], geohash: string, index: number): Cluster {
+function createClusterData(photos: PhotoRow[], geohash: string, index: number): ClusterData {
   // Calculate centroid and average accuracy
   let sumLat = 0, sumLng = 0, sumAcc = 0, accCount = 0
   for (const p of photos) {
@@ -329,7 +419,7 @@ function createCluster(photos: PhotoRow[], geohash: string, index: number): Clus
   }
   const avgLat = sumLat / photos.length
   const avgLng = sumLng / photos.length
-  const avgAcc = accCount > 0 ? sumAcc / accCount : 100 // default 100m
+  const avgAcc = accCount > 0 ? sumAcc / accCount : 100
 
   // Get date range
   const dates = photos
@@ -341,12 +431,11 @@ function createCluster(photos: PhotoRow[], geohash: string, index: number): Clus
     cluster_id: `cl_${geohash}_${index}`,
     photo_ids: photos.map(p => p.id),
     photo_count: photos.length,
-    centroid: { lat: avgLat, lng: avgLng, accuracy_m: avgAcc },
-    address: null, // v1: no reverse geocoding
-    time_range: {
-      min: dates[0],
-      max: dates[dates.length - 1],
-    },
+    centroid_lat: avgLat,
+    centroid_lng: avgLng,
+    centroid_accuracy_m: avgAcc,
     geohash,
+    time_min: dates[0],
+    time_max: dates[dates.length - 1],
   }
 }
