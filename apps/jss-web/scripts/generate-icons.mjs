@@ -3,13 +3,13 @@
  * Generate PWA icons from jss-logo.svg
  *
  * Generates:
- * - icon-192.png, icon-512.png (purpose: any)
- * - icon-192-maskable.png, icon-512-maskable.png (purpose: maskable, with safe area padding)
- * - apple-touch-icon.png (180x180)
- * - favicon.ico, favicon.png
+ * - icon-192.png (192x192) - PWA icon
+ * - icon-512.png (512x512) - PWA icon
+ * - apple-touch-icon.png (180x180) - iOS
+ * - favicon.ico, favicon.png - Browser tab
  *
- * Maskable icons have 10% padding on each side (80% logo size) per PWA spec
- * https://web.dev/maskable-icon/
+ * Note: Maskable icons removed for Firefox compatibility.
+ * Firefox doesn't support maskable purpose and fails to load icons.
  */
 
 import sharp from 'sharp'
@@ -24,9 +24,6 @@ const iconsDir = join(publicDir, 'icons')
 const svgPath = join(iconsDir, 'jss-logo.svg')
 const svgBuffer = readFileSync(svgPath)
 
-// Theme color for maskable icon background
-const THEME_COLOR = '#FF7A00'
-
 async function generatePng(size, outputName) {
   const outputPath = join(iconsDir, outputName)
   await sharp(svgBuffer)
@@ -34,43 +31,6 @@ async function generatePng(size, outputName) {
     .png()
     .toFile(outputPath)
   console.log(`✅ Generated ${outputName} (${size}x${size})`)
-}
-
-/**
- * Generate maskable icon with safe area padding
- * Logo is 80% of the canvas, centered on theme color background
- */
-async function generateMaskable(size, outputName) {
-  const outputPath = join(iconsDir, outputName)
-  const logoSize = Math.round(size * 0.8) // 80% for safe area
-  const padding = Math.round((size - logoSize) / 2)
-
-  // Resize logo
-  const logo = await sharp(svgBuffer)
-    .resize(logoSize, logoSize)
-    .png()
-    .toBuffer()
-
-  // Create background with theme color and composite logo
-  await sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background: THEME_COLOR,
-    },
-  })
-    .composite([
-      {
-        input: logo,
-        top: padding,
-        left: padding,
-      },
-    ])
-    .png()
-    .toFile(outputPath)
-
-  console.log(`✅ Generated ${outputName} (${size}x${size}, maskable)`)
 }
 
 async function generateFavicon() {
@@ -94,13 +54,9 @@ async function generateFavicon() {
 async function main() {
   console.log('🎨 Generating JSS icons from jss-logo.svg...\n')
 
-  // PWA icons (purpose: any)
+  // PWA icons
   await generatePng(192, 'icon-192.png')
   await generatePng(512, 'icon-512.png')
-
-  // PWA maskable icons (purpose: maskable) - with safe area padding
-  await generateMaskable(192, 'icon-192-maskable.png')
-  await generateMaskable(512, 'icon-512-maskable.png')
 
   // Apple touch icon
   await generatePng(180, 'apple-touch-icon.png')
@@ -109,7 +65,6 @@ async function main() {
   await generateFavicon()
 
   console.log('\n✨ All icons generated!')
-  console.log('\n📱 Test maskable icons at: https://maskable.app/editor')
 }
 
 main().catch(console.error)
