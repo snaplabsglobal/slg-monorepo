@@ -1,9 +1,11 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Folder, Camera, Shield, Settings } from 'lucide-react'
+import { Folder, Camera, Shield, Settings, LogOut } from 'lucide-react'
 import { JSSLogo } from '@/components/ui/JSSLogo'
+import { createBrowserClient } from '@slo/snap-auth/client'
 
 /**
  * Sidebar Navigation - Desktop (Manus对齐版)
@@ -12,7 +14,7 @@ import { JSSLogo } from '@/components/ui/JSSLogo'
  *
  * 菜单顺序(不可改): Jobs → Camera → Rescue Mode → Settings
  * Active Item: 背景rgb(245,158,11), 文字白色
- * 底部: 用户信息(头像+名字+角色), Logout在Settings页面内
+ * 底部: 用户信息(头像+名字+角色) + Sign Out
  */
 
 const navItems = [
@@ -39,6 +41,7 @@ const navItems = [
 ]
 
 export function Sidebar() {
+  const router = useRouter()
   const pathname = usePathname()
 
   const isActive = (href: string) => {
@@ -49,6 +52,12 @@ export function Sidebar() {
       return pathname === '/rescue' || pathname.startsWith('/rescue/')
     }
     return pathname === href
+  }
+
+  const handleSignOut = async () => {
+    const supabase = createBrowserClient()
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   return (
@@ -80,8 +89,8 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User Info Footer (头像+名字+角色, Logout在Settings页面) */}
-      <div className="px-3 py-4 border-t border-gray-100">
+      {/* User Info Footer + Sign Out */}
+      <div className="px-3 py-4 border-t border-gray-100 space-y-2">
         <div className="flex items-center gap-3 px-3 py-2">
           {/* Avatar (首字母圆形) */}
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-600 text-sm font-medium">
@@ -92,6 +101,14 @@ export function Sidebar() {
             <div className="text-xs text-gray-500">Contractor</div>
           </div>
         </div>
+        {/* Sign Out Button */}
+        <button
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <LogOut className="h-5 w-5 text-gray-400" />
+          Sign out
+        </button>
       </div>
     </aside>
   )
