@@ -101,6 +101,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (body.address !== undefined) {
       updates.address = body.address?.trim() || null
     }
+    if (body.place_id !== undefined) {
+      updates.place_id = body.place_id || null
+    }
+    if (body.geofence_lat !== undefined && body.geofence_lng !== undefined) {
+      updates.geofence_lat = body.geofence_lat
+      updates.geofence_lng = body.geofence_lng
+    }
     if (body.status !== undefined) {
       if (!['active', 'archived'].includes(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 })

@@ -109,14 +109,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job name is required' }, { status: 400 })
     }
 
+    // Build insert data with optional address fields
+    const insertData: Record<string, unknown> = {
+      organization_id: membership.organization_id,
+      name: body.name.trim(),
+      address: body.address?.trim() || null,
+      status: 'active',
+    }
+
+    // Add Google Places data if provided
+    if (body.place_id) {
+      insertData.place_id = body.place_id
+    }
+    if (typeof body.geofence_lat === 'number' && typeof body.geofence_lng === 'number') {
+      insertData.geofence_lat = body.geofence_lat
+      insertData.geofence_lng = body.geofence_lng
+    }
+
     const { data: job, error: insertError } = await supabase
       .from('jobs')
-      .insert({
-        organization_id: membership.organization_id,
-        name: body.name.trim(),
-        address: body.address?.trim() || null,
-        status: 'active',
-      })
+      .insert(insertData)
       .select()
       .single()
 

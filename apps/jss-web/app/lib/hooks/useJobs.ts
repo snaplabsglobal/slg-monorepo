@@ -1,5 +1,5 @@
 import useSWR, { mutate as globalMutate } from 'swr'
-import type { Job, JobListResponse } from '@/lib/types'
+import type { Job, JobListResponse, CreateJobRequest } from '@/lib/types'
 
 // Fetcher with no-store to prevent caching
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(res => {
@@ -40,11 +40,11 @@ export function useJobs(status: JobStatus = 'active') {
     }
   )
 
-  const createJob = async (name: string, address?: string) => {
+  const createJob = async (data: CreateJobRequest) => {
     const res = await fetch('/api/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address }),
+      body: JSON.stringify(data),
       cache: 'no-store',
     })
 

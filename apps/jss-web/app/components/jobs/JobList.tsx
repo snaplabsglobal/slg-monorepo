@@ -1,30 +1,53 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useJobs } from '@/lib/hooks'
 import { Archive, Trash2, MoreVertical, Undo } from 'lucide-react'
-import type { Job } from '@/lib/types'
+import { AddressAutocomplete, type AddressData } from '@/components/ui/AddressAutocomplete'
+import type { Job, CreateJobRequest } from '@/lib/types'
 
 interface CreateJobModalProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (name: string, address?: string) => Promise<void>
+  onSubmit: (data: CreateJobRequest) => Promise<void>
   isSubmitting: boolean
   error: string
 }
 
 function CreateJobModal({ isOpen, onClose, onSubmit, isSubmitting, error }: CreateJobModalProps) {
   const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
+  const [addressData, setAddressData] = useState<AddressData | null>(null)
+
+  const handleAddressChange = useCallback((data: AddressData | null) => {
+    setAddressData(data)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
-    await onSubmit(name.trim(), address.trim() || undefined)
+    const data: CreateJobRequest = {
+      name: name.trim(),
+    }
+
+    // Add address data if selected from autocomplete
+    if (addressData) {
+      data.address = addressData.formatted_address
+      data.place_id = addressData.place_id
+      data.geofence_lat = addressData.lat
+      data.geofence_lng = addressData.lng
+    }
+
+    await onSubmit(data)
     setName('')
-    setAddress('')
+    setAddressData(null)
+  }
+
+  const handleClose = () => {
+    setName('')
+    setAddressData(null)
+    onClose()
   }
 
   if (!isOpen) return null
@@ -53,15 +76,16 @@ function CreateJobModal({ isOpen, onClose, onSubmit, isSubmitting, error }: Crea
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Address (optional)
+              Job Address
             </label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g., 123 Main St, City, State"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[rgb(245,158,11)] focus:border-[rgb(245,158,11)]"
+            <AddressAutocomplete
+              value={addressData?.formatted_address}
+              onChange={handleAddressChange}
+              placeholder="Start typing to search..."
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Address enables Magic Import to find photos near this job.
+            </p>
           </div>
 
           {error && (
@@ -73,7 +97,7 @@ function CreateJobModal({ isOpen, onClose, onSubmit, isSubmitting, error }: Crea
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
               disabled={isSubmitting}
             >
@@ -314,12 +338,12 @@ export function JobList() {
     await deleteJob(jobId)
   }
 
-  const handleCreateJob = async (name: string, address?: string) => {
+  const handleCreateJob = async (data: CreateJobRequest) => {
     setIsCreating(true)
     setCreateError('')
 
     try {
-      await createJob(name, address)
+      await createJob(data)
       setShowCreateModal(false)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create job')
