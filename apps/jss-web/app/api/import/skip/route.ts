@@ -19,7 +19,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
+import { getSessionOrUnauthorized } from '@/lib/server/api-guards'
 
 type SkipReason = 'not_jobsite' | 'missing_info' | 'skip_for_now'
 

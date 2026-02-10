@@ -34,7 +34,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
+import { getSessionOrUnauthorized } from '@/lib/server/api-guards'
 
 // Geohash encoding (precision 7 = ~150m)
 const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz'

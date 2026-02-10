@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getSessionOrUnauthorized } from '@/lib/server/rescue-guards'
+import { getSessionOrUnauthorized } from '@/lib/server/api-guards'
 
 export async function GET() {
   // Only allow in development
