@@ -4,6 +4,8 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePhotos } from '@/lib/hooks'
 import { PhotoViewer } from '@/components/photos/PhotoViewer'
+import { ImportModal } from './ImportModal'
+import { Upload } from 'lucide-react'
 import type { Job, JobPhoto } from '@/lib/types'
 
 interface PhotoTimelineProps {
@@ -245,10 +247,18 @@ interface JobDetailProps {
 
 export function JobDetail({ job }: JobDetailProps) {
   const { refresh } = usePhotos(job.id)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const handlePhotoUploaded = () => {
     refresh()
   }
+
+  const handleImported = () => {
+    refresh()
+  }
+
+  // Check if job has location for Magic Import
+  const hasLocation = !!(job.geofence_lat && job.geofence_lng)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -279,7 +289,7 @@ export function JobDetail({ job }: JobDetailProps) {
         {/* Primary Action: Take Photos - Full width, prominent */}
         <Link
           href={`/jobs/${job.id}/camera`}
-          className="block w-full py-3.5 text-center text-white font-medium rounded-lg shadow-sm mb-6 bg-[rgb(245,158,11)] hover:bg-[rgb(220,140,10)]"
+          className="block w-full py-3.5 text-center text-white font-medium rounded-lg shadow-sm mb-3 bg-[rgb(245,158,11)] hover:bg-[rgb(220,140,10)]"
         >
           <span className="inline-flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -289,6 +299,27 @@ export function JobDetail({ job }: JobDetailProps) {
             Take Photos
           </span>
         </Link>
+
+        {/* Secondary Action: Import Photos */}
+        <button
+          onClick={() => setShowImportModal(true)}
+          disabled={!hasLocation}
+          className={`block w-full py-3 text-center font-medium rounded-lg mb-6 border transition-colors ${
+            hasLocation
+              ? 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              : 'border-gray-200 text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Import photos
+          </span>
+        </button>
+        {!hasLocation && (
+          <p className="text-xs text-gray-500 text-center -mt-4 mb-6">
+            Add a job address to import photos.
+          </p>
+        )}
 
         {/* Recent Photos Section */}
         <div className="flex items-center justify-between mb-3">
@@ -309,6 +340,14 @@ export function JobDetail({ job }: JobDetailProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       </Link>
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        job={job}
+        onImported={handleImported}
+      />
     </div>
   )
 }

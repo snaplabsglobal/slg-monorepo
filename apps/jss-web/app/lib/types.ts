@@ -17,6 +17,9 @@ export interface Job {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  // Geofence (for Smart Trace / Magic Import)
+  geofence_lat?: number | null
+  geofence_lng?: number | null
   // Computed fields (from queries)
   photo_count?: number
   last_photo_at?: string | null
