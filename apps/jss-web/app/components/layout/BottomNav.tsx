@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Folder, Camera, MoreHorizontal, Shield, Settings, LogOut } from 'lucide-react'
+import { Folder, Camera, MoreHorizontal, Upload, Settings, LogOut } from 'lucide-react'
 
 /**
  * Mobile Bottom Navigation (Manus对齐版)
@@ -61,7 +61,7 @@ export function BottomNav() {
         </div>
       </nav>
 
-      {/* Bottom Sheet (仅含3项: Rescue Mode / Settings / Logout) */}
+      {/* Bottom Sheet (仅含3项: Import Photos / Settings / Logout) */}
       {showSheet && (
         <>
           {/* Backdrop */}
@@ -79,14 +79,14 @@ export function BottomNav() {
 
             {/* Menu Items */}
             <div className="px-4 pb-4 space-y-1">
-              {/* Rescue Mode */}
+              {/* Import Photos */}
               <Link
-                href="/rescue"
+                href="/import"
                 onClick={() => setShowSheet(false)}
                 className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-gray-50"
               >
-                <Shield className="h-6 w-6 text-gray-600" />
-                <span className="text-base text-gray-900">Rescue Mode</span>
+                <Upload className="h-6 w-6 text-gray-600" />
+                <span className="text-base text-gray-900">Import Photos</span>
               </Link>
 
               {/* Settings */}

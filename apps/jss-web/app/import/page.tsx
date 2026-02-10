@@ -1,24 +1,22 @@
 'use client'
 
 /**
- * Rescue Mode v1 - Main Entry Point
- * Route: /rescue
+ * Import Photos - Main Entry Point
+ * Route: /import
  *
- * Gate 0 Requirements:
- * - Clear "Rescue Mode" title
- * - Start Scan button that calls POST /api/rescue/scan
- * - Shows results with Confirm/Skip actions
+ * Scans unassigned photos and groups them by location/time
+ * to help users quickly organize photos into jobs.
  *
  * v1 API Contract:
- * - POST /api/rescue/scan → compute suggestions (stateless)
- * - POST /api/rescue/confirm → assign photos to job
- * - POST /api/rescue/skip → mark photos as skipped
+ * - POST /api/import/scan → compute suggestions (stateless)
+ * - POST /api/import/confirm → assign photos to job
+ * - POST /api/import/skip → mark photos as skipped
  */
 
 import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '../components/layout'
-import { Shield, Loader2, MapPin, Calendar, Check, X, ChevronRight } from 'lucide-react'
+import { Upload, Loader2, MapPin, Calendar, Check, X, ChevronRight } from 'lucide-react'
 
 // ============================================================
 // Types (v1 API Contract)
@@ -61,7 +59,7 @@ type ScanResponse = {
 // ============================================================
 
 async function callScan(): Promise<ScanResponse> {
-  const res = await fetch('/api/rescue/scan', {
+  const res = await fetch('/api/import/scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ scope: { mode: 'unassigned' }, limit: 2000 }),
@@ -84,7 +82,7 @@ async function callConfirm(
       ? { action, job: { name: jobName }, photo_ids: photoIds }
       : { action, job_id: jobId, photo_ids: photoIds }
 
-  const res = await fetch('/api/rescue/confirm', {
+  const res = await fetch('/api/import/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -100,7 +98,7 @@ async function callSkip(
   photoIds: string[],
   reason: 'not_jobsite' | 'missing_info' | 'skip_for_now'
 ): Promise<{ ok: boolean; skipped_count: number }> {
-  const res = await fetch('/api/rescue/skip', {
+  const res = await fetch('/api/import/skip', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ photo_ids: photoIds, reason }),
@@ -186,7 +184,7 @@ function ClusterCard({
 
 type FlowState = 'idle' | 'scanning' | 'results' | 'done'
 
-export default function RescueModePage() {
+export default function ImportPhotosPage() {
   const router = useRouter()
 
   const [flowState, setFlowState] = useState<FlowState>('idle')
@@ -289,10 +287,10 @@ export default function RescueModePage() {
         {/* Header */}
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-amber-100 p-2">
-            <Shield className="h-6 w-6 text-amber-600" />
+            <Upload className="h-6 w-6 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Rescue Mode</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Import Photos</h1>
             <p className="mt-0.5 text-sm text-gray-500">
               Organize unassigned photos into jobs
             </p>
@@ -309,11 +307,11 @@ export default function RescueModePage() {
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-200 bg-white p-6">
               <h2 className="text-lg font-semibold text-gray-900">
-                Ready to scan unassigned photos
+                Ready to organize your photos
               </h2>
               <p className="mt-2 text-sm text-gray-600">
                 We&apos;ll find photos without a job and group them by location and time
-                to suggest new jobs.
+                to help you create jobs quickly.
               </p>
 
               <div className="mt-6">
@@ -321,7 +319,7 @@ export default function RescueModePage() {
                   onClick={handleStartScan}
                   className="w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600"
                 >
-                  Start Scan
+                  Find Unassigned Photos
                 </button>
               </div>
             </div>
@@ -337,7 +335,7 @@ export default function RescueModePage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-500" />
             <div className="mt-4 text-lg font-semibold text-gray-900">
-              Scanning photos...
+              Finding photos...
             </div>
             <p className="mt-2 text-sm text-gray-500">Grouping by location and time</p>
           </div>
@@ -353,11 +351,11 @@ export default function RescueModePage() {
               </div>
               <div className="mt-1 flex items-center gap-4 text-sm">
                 <span className="font-semibold text-gray-900">
-                  {remainingClusters.length} cluster{remainingClusters.length !== 1 ? 's' : ''} to review
+                  {remainingClusters.length} group{remainingClusters.length !== 1 ? 's' : ''} to review
                 </span>
                 {remainingUnknown > 0 && (
                   <span className="text-gray-500">
-                    + {remainingUnknown} unknown
+                    + {remainingUnknown} without location
                   </span>
                 )}
               </div>
@@ -392,7 +390,7 @@ export default function RescueModePage() {
               <div className="rounded-xl border border-gray-200 bg-white p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-semibold text-gray-900">Unknown location</div>
+                    <div className="font-semibold text-gray-900">No location data</div>
                     <div className="text-sm text-gray-600">
                       {remainingUnknown} photos without GPS
                     </div>
@@ -415,13 +413,13 @@ export default function RescueModePage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
             <div className="text-lg font-semibold text-green-600">
               {scanData?.stats.total_candidates === 0
-                ? 'No photos to rescue'
+                ? 'No photos to import'
                 : 'All done!'}
             </div>
             <p className="mt-2 text-sm text-gray-500">
               {scanData?.stats.total_candidates === 0
                 ? 'All your photos are already assigned to jobs.'
-                : 'All suggestions have been processed.'}
+                : 'All photos have been organized.'}
             </p>
             <div className="mt-6">
               <button

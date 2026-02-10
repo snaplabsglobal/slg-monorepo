@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Folder, Camera, Shield, Settings, LogOut } from 'lucide-react'
+import { Folder, Camera, Upload, Settings, LogOut } from 'lucide-react'
 import { JSSLogo } from '@/components/ui/JSSLogo'
 import { createBrowserClient } from '@slo/snap-auth/client'
 
@@ -29,9 +29,9 @@ const navItems = [
     icon: Camera,
   },
   {
-    href: '/rescue',
-    label: 'Rescue Mode',
-    icon: Shield,
+    href: '/import',
+    label: 'Import Photos',
+    icon: Upload,
   },
   {
     href: '/settings',
@@ -48,8 +48,8 @@ export function Sidebar() {
     if (href === '/jobs') {
       return pathname === '/jobs' || pathname.startsWith('/jobs/')
     }
-    if (href === '/rescue') {
-      return pathname === '/rescue' || pathname.startsWith('/rescue/')
+    if (href === '/import') {
+      return pathname === '/import' || pathname.startsWith('/import/')
     }
     return pathname === href
   }
