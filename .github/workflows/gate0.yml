@@ -51,6 +51,9 @@ jobs:
             exit 1
           }
 
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
+
       - name: Build jss-web
         run: pnpm --filter jss-web build
         env:
@@ -103,6 +106,9 @@ jobs:
             echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
             exit 1
           }
+
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
@@ -157,6 +163,9 @@ jobs:
             echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
             exit 1
           }
+
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
