@@ -42,9 +42,15 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.975.0
         version: 3.975.0
+      '@slo/shared-utils':
+        specifier: workspace:^
+        version: link:../../packages/shared-utils
       '@slo/snap-auth':
         specifier: workspace:^
         version: link:../../packages/snap-auth
+      '@slo/snap-types':
+        specifier: workspace:^
+        version: link:../../packages/snap-types
       '@supabase/ssr':
         specifier: ^0.8.0
         version: 0.8.0(@supabase/supabase-js@2.93.0)
@@ -56,7 +62,7 @@ importers:
         version: 0.563.0(react@19.2.3)
       next:
         specifier: 16.1.1
-        version: 16.1.1(@babel/core@7.28.6)(react-dom@19.2.3)(react@19.2.3)
+        version: 16.1.1(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.3)(react@19.2.3)
       next-pwa:
         specifier: ^5.6.0
         version: 5.6.0(@babel/core@7.28.6)(next@16.1.1)(webpack@5.104.1)
@@ -73,6 +79,9 @@ importers:
         specifier: ^5.0.0
         version: 5.0.11(@types/react@19.2.9)(react@19.2.3)
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.58.2
+        version: 1.58.2
       '@types/google.maps':
         specifier: ^3.58.1
         version: 3.58.1
@@ -127,12 +136,15 @@ importers:
       '@slo/snap-auth':
         specifier: workspace:^
         version: link:../../packages/snap-auth
+      '@slo/snap-types':
+        specifier: workspace:^
+        version: link:../../packages/snap-types
       '@supabase/supabase-js':
         specifier: ^2.93.0
         version: 2.93.0
       next:
         specifier: 16.1.1
-        version: 16.1.1(@babel/core@7.28.6)(react-dom@19.2.3)(react@19.2.3)
+        version: 16.1.1(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.3)(react@19.2.3)
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -190,7 +202,7 @@ importers:
         version: 12.29.2(react-dom@19.2.3)(react@19.2.3)
       next:
         specifier: 16.1.1
-        version: 16.1.1(@babel/core@7.28.6)(react-dom@19.2.3)(react@19.2.3)
+        version: 16.1.1(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.3)(react@19.2.3)
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -284,6 +296,19 @@ importers:
       '@types/react':
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/snap-core:
+    dependencies:
+      '@slo/shared-utils':
+        specifier: workspace:^
+        version: link:../shared-utils
+      '@slo/snap-types':
+        specifier: workspace:^
+        version: link:../snap-types
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -3155,6 +3180,13 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
+
+  /@playwright/test@1.58.2:
+    resolution: {integrity: sha512-akea+6bHYBBfA9uQqSYmlJXn61cTa+jbO87xVLCWbTqbWadRVmhxlXATaOjOgcBaWU4ePo0wB41KMFv3o35IXA==}
+    engines: {node: '>=18'}
+    hasBin: true
+    dependencies:
+      playwright: 1.58.2
 
   /@radix-ui/number@1.0.1:
     resolution: {integrity: sha512-T5gIdVO2mmPW3NNhjNgEP3cqMXjXL9UbO0BzWcXfvdBs+BohbQxvd/K5hSVKmn9/lbTdsQVKbUcP5WLCwvUbBg==}
@@ -7641,6 +7673,13 @@ packages:
   /fs.realpath@1.0.0:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
 
+  /fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+    requiresBuild: true
+    optional: true
+
   /fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -8713,7 +8752,7 @@ packages:
       babel-loader: 8.4.1(@babel/core@7.28.6)(webpack@5.104.1)
       clean-webpack-plugin: 4.0.0(webpack@5.104.1)
       globby: 11.1.0
-      next: 16.1.1(@babel/core@7.28.6)(react-dom@19.2.3)(react@19.2.3)
+      next: 16.1.1(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.3)(react@19.2.3)
       terser-webpack-plugin: 5.3.16(webpack@5.104.1)
       workbox-webpack-plugin: 6.6.0(webpack@5.104.1)
       workbox-window: 6.6.0
@@ -8727,7 +8766,7 @@ packages:
       - webpack
     dev: false
 
-  /next@16.1.1(@babel/core@7.28.6)(react-dom@19.2.3)(react@19.2.3):
+  /next@16.1.1(@babel/core@7.28.6)(@playwright/test@1.58.2)(react-dom@19.2.3)(react@19.2.3):
     resolution: {integrity: sha512-QI+T7xrxt1pF6SQ/JYFz95ro/mg/1Znk5vBebsWwbpejj1T0A23hO7GYEaVac9QUOT2BIMiuzm0L99ooq7k0/w==}
     engines: {node: '>=20.9.0'}
     hasBin: true
@@ -8749,6 +8788,7 @@ packages:
         optional: true
     dependencies:
       '@next/env': 16.1.1
+      '@playwright/test': 1.58.2
       '@swc/helpers': 0.5.15
       baseline-browser-mapping: 2.9.18
       caniuse-lite: 1.0.30001766
@@ -9114,6 +9154,20 @@ packages:
       mlly: 1.8.0
       pathe: 2.0.3
     dev: true
+
+  /playwright-core@1.58.2:
+    resolution: {integrity: sha512-yZkEtftgwS8CsfYo7nm0KE8jsvm6i/PTgVtB8DL726wNf6H2IMsDuxCpJj59KDaxCtSnrWan2AeDqM7JBaultg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  /playwright@1.58.2:
+    resolution: {integrity: sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A==}
+    engines: {node: '>=18'}
+    hasBin: true
+    dependencies:
+      playwright-core: 1.58.2
+    optionalDependencies:
+      fsevents: 2.3.2
 
   /polished@4.3.1:
     resolution: {integrity: sha512-OBatVyC/N7SCW/FaDHrSd+vn0o5cS855TOmYi4OkdWUMSJCET/xip//ch8xGUvtr3i44X9LVyWwQlRMTN3pwSA==}

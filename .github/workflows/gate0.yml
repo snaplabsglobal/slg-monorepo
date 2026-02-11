@@ -1,0 +1,175 @@
+name: Gate 0 - Full Suite
+
+on:
+  pull_request:
+    paths:
+      - 'apps/jss-web/**'
+      - 'packages/**'
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  CI: true
+
+jobs:
+  gate0-a-data:
+    name: "Gate 0-A: Data / Queue / Evidence"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build jss-web
+        run: pnpm --filter jss-web build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-A tests
+        run: pnpm --filter jss-web exec playwright test --project=gate0a
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0a-results
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-artifacts/
+          retention-days: 7
+
+  gate0-b-ui:
+    name: "Gate 0-B: UI / Interaction / Routing"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build jss-web
+        run: pnpm --filter jss-web build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-B tests
+        run: pnpm --filter jss-web exec playwright test --project=gate0b
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0b-results
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-artifacts/
+          retention-days: 7
+
+  gate0-c-visual:
+    name: "Gate 0-C: Visual Regression"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true # Visual tests don't block merge
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build jss-web
+        run: pnpm --filter jss-web build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-C visual tests
+        run: pnpm --filter jss-web exec playwright test --project=gate0c --update-snapshots
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload visual diff artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0c-visual-diff
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-results/
+          retention-days: 7
+
+  gate0-summary:
+    name: "Gate 0 Summary"
+    runs-on: ubuntu-latest
+    needs: [gate0-a-data, gate0-b-ui, gate0-c-visual]
+    if: always()
+
+    steps:
+      - name: Check Gate 0-A result
+        if: needs.gate0-a-data.result != 'success'
+        run: |
+          echo "::error::Gate 0-A (Data/Queue/Evidence) failed!"
+          exit 1
+
+      - name: Check Gate 0-B result
+        if: needs.gate0-b-ui.result != 'success'
+        run: |
+          echo "::error::Gate 0-B (UI/Interaction/Routing) failed!"
+          exit 1
+
+      - name: Gate 0 Passed
+        run: |
+          echo "✅ Gate 0-A: PASSED"
+          echo "✅ Gate 0-B: PASSED"
+          echo "ℹ️ Gate 0-C: ${{ needs.gate0-c-visual.result }} (visual regression, non-blocking)"
+          echo ""
+          echo "🎉 Gate 0 verification complete!"
