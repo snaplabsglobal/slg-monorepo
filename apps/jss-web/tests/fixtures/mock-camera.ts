@@ -116,8 +116,15 @@ export async function setupMockCamera(page: Page): Promise<void> {
  * Wait for harness to be ready
  */
 export async function waitForHarness(page: Page): Promise<void> {
+  // Wait for camera view to render
   await page.waitForSelector('[data-testid="camera-view"]', { timeout: 30_000 })
-  await page.waitForTimeout(1000) // Allow harness to initialize
+
+  // Wait for TestHarness panel to render (it has a useEffect that sets hasHarnessParam)
+  // The harness panel contains the run-stress-test button
+  await page.waitForSelector('[data-testid="run-stress-test"]', { timeout: 30_000 })
+
+  // Allow harness to fully initialize
+  await page.waitForTimeout(500)
 }
 
 /**
