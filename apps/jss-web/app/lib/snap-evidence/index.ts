@@ -76,6 +76,10 @@ export {
   manuallyAssignPhoto,
   getPhotosForSmartTrace,
   getPhotosWithSuggestions,
+  // Debug Panel (CTO Directive E)
+  getQueueStats,
+  listAllPhotos,
+  type QueueStats,
 } from './local-store'
 
 // Upload Queue

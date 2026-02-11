@@ -15,6 +15,8 @@ import {
 } from '@/lib/snap-evidence'
 import { useRecentJobs } from '@/lib/hooks'
 import { JobContextBar } from './JobContextBar'
+import { QueueDebugPanel } from './QueueDebugPanel'
+import { TestHarness } from './TestHarness'
 
 interface Job {
   id: string
@@ -446,7 +448,7 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
       )}
 
       {/* Camera view - video always rendered so ref works */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" data-testid="camera-view">
         <video
           ref={videoRef}
           autoPlay
@@ -469,12 +471,14 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
             </button>
 
             {/* Job Context Bar - switchable jobs without leaving camera */}
-            <JobContextBar
-              currentJob={currentJob}
-              recentJobs={recentJobs}
-              onJobSelect={handleJobSwitch}
-              isLoading={isLoadingJobs}
-            />
+            <div data-testid="job-title" className="flex-1 min-w-0">
+              <JobContextBar
+                currentJob={currentJob}
+                recentJobs={recentJobs}
+                onJobSelect={handleJobSwitch}
+                isLoading={isLoadingJobs}
+              />
+            </div>
 
             {/* GPS Status Indicator (Smart Trace) */}
             <div className="w-10 flex items-center justify-center flex-shrink-0">
@@ -535,19 +539,31 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
             disabled={isCapturing}
             className="w-16 h-16 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/30 active:scale-95 transition-transform disabled:opacity-50"
             aria-label="Capture photo"
+            data-testid="shutter-button"
           >
             <div className={`w-12 h-12 rounded-full bg-white ${isCapturing ? 'scale-90' : ''} transition-transform`} />
           </button>
 
-          {/* Right: View photos */}
-          <button
-            onClick={() => router.push(`/jobs/${currentJob.id}`)}
-            className="w-12 h-12 flex items-center justify-center text-white/70 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </button>
+          {/* Right: View photos with queue badge */}
+          <div className="relative">
+            <button
+              onClick={() => router.push(`/jobs/${currentJob.id}`)}
+              className="w-12 h-12 flex items-center justify-center text-white/70 hover:text-white"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            {/* Queue badge for testing */}
+            {thumbnails.length > 0 && (
+              <span
+                data-testid="queue-badge"
+                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center"
+              >
+                {thumbnails.length}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Hint */}
@@ -555,6 +571,12 @@ export function SnapCamera({ job: initialJob, recentJobs: initialRecentJobs, loc
           Point at work area and tap to capture
         </p>
       </div>
+
+      {/* Queue Debug Panel (dev-only) */}
+      <QueueDebugPanel />
+
+      {/* Test Harness (dev-only, ?harness=1) */}
+      <TestHarness videoRef={videoRef} />
 
       {/* Photo viewer modal */}
       {viewingPhoto && (
