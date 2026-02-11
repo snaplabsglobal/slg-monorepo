@@ -15,6 +15,7 @@
         "check": "pnpm type-check && pnpm build",
         "check-before-push": "pnpm type-check && pnpm build && pnpm lint",
         "quick-check": "pnpm type-check",
+        "ci:lockfile": "pnpm install --frozen-lockfile",
         "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
         "deploy:fix": "./scripts/auto-fix.sh",
         "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts"

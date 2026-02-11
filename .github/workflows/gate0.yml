@@ -37,7 +37,19 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            echo ""
+            echo "Quick fix:"
+            echo "  pnpm install"
+            echo "  git add pnpm-lock.yaml"
+            echo "  git commit -m 'chore: sync lockfile'"
+            echo "  git push"
+            exit 1
+          }
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
@@ -84,7 +96,13 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            exit 1
+          }
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
@@ -132,7 +150,13 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            exit 1
+          }
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
