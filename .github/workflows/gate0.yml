@@ -12,6 +12,8 @@ on:
 
 env:
   CI: true
+  # Enable TestHarness in CI builds for Playwright tests
+  NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
 jobs:
   gate0-a-data:
@@ -39,6 +41,8 @@ jobs:
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
@@ -47,6 +51,7 @@ jobs:
         run: pnpm --filter jss-web exec playwright test --project=gate0a
         env:
           BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
         if: always()
@@ -83,6 +88,8 @@ jobs:
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
@@ -91,6 +98,7 @@ jobs:
         run: pnpm --filter jss-web exec playwright test --project=gate0b
         env:
           BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
         if: always()
@@ -128,6 +136,8 @@ jobs:
 
       - name: Build jss-web
         run: pnpm --filter jss-web build
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
@@ -136,6 +146,7 @@ jobs:
         run: pnpm --filter jss-web exec playwright test --project=gate0c --update-snapshots
         env:
           BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload visual diff artifacts
         if: always()

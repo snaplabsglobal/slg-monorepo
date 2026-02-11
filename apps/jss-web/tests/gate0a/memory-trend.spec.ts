@@ -17,11 +17,8 @@ import {
  */
 
 test.describe('Gate 0-A: Memory Leak Trend Test', () => {
-  // This test is longer, only run for major versions
-  test.skip(({ }, testInfo) => {
-    // Skip in CI unless explicitly requested
-    return !!process.env.CI && !process.env.RUN_MEMORY_TESTS
-  })
+  // Skip in CI unless explicitly requested (memory tests are slow)
+  test.skip(() => !!process.env.CI && !process.env.RUN_MEMORY_TESTS, 'Memory tests skipped in CI unless RUN_MEMORY_TESTS=1')
 
   test.beforeEach(async ({ page }) => {
     await setupMockCamera(page)

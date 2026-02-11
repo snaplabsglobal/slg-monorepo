@@ -56,9 +56,14 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'pnpm dev',
+    // In CI, use 'pnpm start' to run the production build
+    // In dev, use 'pnpm dev' for HMR
+    command: process.env.CI ? 'pnpm start' : 'pnpm dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      NEXT_PUBLIC_ALLOW_HARNESS: 'true',
+    },
   },
 })
