@@ -51,11 +51,8 @@ jobs:
             exit 1
           }
 
-      - name: Build workspace packages
-        run: pnpm --filter "./packages/*" build
-
-      - name: Build jss-web
-        run: pnpm --filter jss-web build
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -107,11 +104,8 @@ jobs:
             exit 1
           }
 
-      - name: Build workspace packages
-        run: pnpm --filter "./packages/*" build
-
-      - name: Build jss-web
-        run: pnpm --filter jss-web build
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -164,11 +158,8 @@ jobs:
             exit 1
           }
 
-      - name: Build workspace packages
-        run: pnpm --filter "./packages/*" build
-
-      - name: Build jss-web
-        run: pnpm --filter jss-web build
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
