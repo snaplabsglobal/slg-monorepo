@@ -63,6 +63,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
+      // CI must be passed for isTestMode() to work in camera page
+      CI: process.env.CI ? 'true' : '',
       NEXT_PUBLIC_ALLOW_HARNESS: 'true',
     },
   },
