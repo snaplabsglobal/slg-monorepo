@@ -18,14 +18,13 @@ export async function middleware(request: NextRequest) {
 
   // Test mode bypass for CI/Playwright tests
   // Allow /jobs/test-job/camera with harness=1 parameter to bypass auth
-  const isTestMode =
+  // Note: Middleware runs on Edge, so only build-time vars (NEXT_PUBLIC_*) are available
+  const isTestRoute =
     request.nextUrl.pathname === '/jobs/test-job/camera' &&
-    request.nextUrl.searchParams.get('harness') === '1' &&
-    (process.env.CI === 'true' ||
-      process.env.NODE_ENV === 'development' ||
-      process.env.NEXT_PUBLIC_ALLOW_HARNESS === 'true')
+    request.nextUrl.searchParams.get('harness') === '1'
+  const isTestModeEnabled = process.env.NEXT_PUBLIC_ALLOW_HARNESS === 'true'
 
-  if (isTestMode) {
+  if (isTestRoute && isTestModeEnabled) {
     return response
   }
 
