@@ -42,3 +42,4 @@ ngrok.yml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.gate0-logs/

@@ -16,6 +16,8 @@
         "check-before-push": "pnpm type-check && pnpm build && pnpm lint",
         "quick-check": "pnpm type-check",
         "ci:lockfile": "pnpm install --frozen-lockfile",
+        "gate0:check": "bash scripts/gate0-check.sh",
+        "gate0:selfheal": "node scripts/gate0-selfheal.mjs",
         "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
         "deploy:fix": "./scripts/auto-fix.sh",
         "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts"
