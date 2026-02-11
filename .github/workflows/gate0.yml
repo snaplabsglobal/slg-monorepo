@@ -64,7 +64,7 @@ jobs:
       - name: Run Gate 0-A tests
         run: pnpm --filter jss-web exec playwright test --project=gate0a
         env:
-          BASE_URL: http://localhost:3000
+          BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
@@ -119,7 +119,7 @@ jobs:
       - name: Run Gate 0-B tests
         run: pnpm --filter jss-web exec playwright test --project=gate0b
         env:
-          BASE_URL: http://localhost:3000
+          BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
@@ -175,7 +175,7 @@ jobs:
       - name: Run Gate 0-C visual tests
         run: pnpm --filter jss-web exec playwright test --project=gate0c --update-snapshots
         env:
-          BASE_URL: http://localhost:3000
+          BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload visual diff artifacts

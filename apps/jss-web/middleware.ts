@@ -16,6 +16,19 @@ const CURRENT_APP_CODE = process.env.NEXT_PUBLIC_APP_CODE || 'jobsite-snap'
 export async function middleware(request: NextRequest) {
   const { supabase, response } = await createMiddlewareClient(request)
 
+  // Test mode bypass for CI/Playwright tests
+  // Allow /jobs/test-job/camera with harness=1 parameter to bypass auth
+  const isTestMode =
+    request.nextUrl.pathname === '/jobs/test-job/camera' &&
+    request.nextUrl.searchParams.get('harness') === '1' &&
+    (process.env.CI === 'true' ||
+      process.env.NODE_ENV === 'development' ||
+      process.env.NEXT_PUBLIC_ALLOW_HARNESS === 'true')
+
+  if (isTestMode) {
+    return response
+  }
+
   // Refresh session if expired - required for Server Components
   const {
     data: { user },
