@@ -25,16 +25,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - name: Setup pnpm (from packageManager)
         uses: pnpm/action-setup@v2
-        with:
-          version: 8.15.0
+        # version is read from package.json#packageManager
 
-      - name: Setup Node.js
+      - name: Setup Node.js (from .nvmrc)
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: |
@@ -84,16 +86,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - name: Setup pnpm (from packageManager)
         uses: pnpm/action-setup@v2
-        with:
-          version: 8.15.0
+        # version is read from package.json#packageManager
 
-      - name: Setup Node.js
+      - name: Setup Node.js (from .nvmrc)
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: |
@@ -138,16 +142,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - name: Setup pnpm (from packageManager)
         uses: pnpm/action-setup@v2
-        with:
-          version: 8.15.0
+        # version is read from package.json#packageManager
 
-      - name: Setup Node.js
+      - name: Setup Node.js (from .nvmrc)
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: |

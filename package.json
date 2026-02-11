@@ -18,6 +18,7 @@
         "ci:lockfile": "pnpm install --frozen-lockfile",
         "gate0:check": "bash scripts/gate0-check.sh",
         "gate0:selfheal": "node scripts/gate0-selfheal.mjs",
+        "gate0:report": "node scripts/gate0-report.mjs .gate0-telemetry",
         "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
         "deploy:fix": "./scripts/auto-fix.sh",
         "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts"

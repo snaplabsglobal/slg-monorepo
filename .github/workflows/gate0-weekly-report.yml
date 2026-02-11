@@ -1,0 +1,89 @@
+name: Gate0 Weekly Report
+
+on:
+  schedule:
+    - cron: "0 16 * * 1"  # Monday 08:00 Vancouver (winter)
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm (from packageManager)
+        uses: pnpm/action-setup@v2
+        # version is read from package.json#packageManager
+
+      - name: Setup Node.js (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - run: pnpm -w install --frozen-lockfile
+
+      - name: Download recent gate0-telemetry artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          ART_IDS=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --paginate \
+            --jq '.artifacts[] | select(.name=="gate0-telemetry") | .id' \
+            | head -n 200)
+          [ -z "$ART_IDS" ] && echo "No artifacts found." && exit 0
+          for id in $ART_IDS; do
+            mkdir -p artifacts/$id
+            gh api repos/${{ github.repository }}/actions/artifacts/$id/zip \
+              > artifacts/$id.zip || true
+            [ -s artifacts/$id.zip ] && unzip -o artifacts/$id.zip \
+              -d artifacts/$id >/dev/null && rm -f artifacts/$id.zip
+          done
+
+      - name: Generate reports (this week + last week)
+        run: |
+          mkdir -p out
+          UNTIL=$(date -u +%FT%TZ)
+          SINCE=$(date -u -d "7 days ago" +%FT%TZ)
+          PREV_UNTIL=$SINCE
+          PREV_SINCE=$(date -u -d "14 days ago" +%FT%TZ)
+          node scripts/gate0-report.mjs artifacts/ --since "$SINCE" --until "$UNTIL" \
+            > out/gate0-weekly-report.md || true
+          node scripts/gate0-report.mjs artifacts/ --since "$PREV_SINCE" --until "$PREV_UNTIL" \
+            > out/gate0-prev-week.md || true
+
+      - name: Insert trend comparison
+        run: node scripts/gate0-trend.mjs out/gate0-weekly-report.md out/gate0-prev-week.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0-weekly-report
+          path: |
+            out/gate0-weekly-report.md
+            out/gate0-prev-week.md
+
+      - name: Post to Issue (optional)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const body = fs.readFileSync("out/gate0-weekly-report.md", "utf8").trim();
+            if (!body) return;
+            const ISSUE = Number(process.env.GATE0_REPORT_ISSUE || "0");
+            if (!ISSUE) return;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: ISSUE, body: body.slice(0, 65000),
+            });
+        env:
+          GATE0_REPORT_ISSUE: "0"
