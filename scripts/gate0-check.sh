@@ -20,6 +20,9 @@ WHERE="${GITHUB_ACTIONS:+ci}"
 WHERE="${WHERE:-local}"
 ACTOR="${GITHUB_ACTOR:-local}"
 
+# v0.4: CI duration tracking
+START_MS=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+
 # ── 版本要求（从 .nvmrc 和 package.json#packageManager 读取）────────
 # Single source of truth per Environment Lock Protocol v1.1
 
@@ -67,14 +70,16 @@ classify() {
   echo "UNKNOWN"
 }
 
-# ── Telemetry 写入 ──
+# ── Telemetry 写入 (v0.4: 含 ci_duration_ms) ──
 emit_tel() {
   local stage="$1" class="$2" ok="$3"
-  echo "{\"ts\":\"$(date -u +%FT%TZ)\",\"run_id\":\"$RUN_ID\",\"where\":\"$WHERE\",\"actor\":\"$ACTOR\",\"branch\":\"$BRANCH\",\"sha\":\"$SHA\",\"stage\":\"$stage\",\"class\":\"$class\",\"ok\":$ok,\"log\":\"$LOG\"}" >> "$TEL"
+  local END_MS=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+  local DURATION_MS=$((END_MS - START_MS))
+  echo "{\"ts\":\"$(date -u +%FT%TZ)\",\"run_id\":\"$RUN_ID\",\"where\":\"$WHERE\",\"actor\":\"$ACTOR\",\"branch\":\"$BRANCH\",\"sha\":\"$SHA\",\"stage\":\"$stage\",\"class\":\"$class\",\"ok\":$ok,\"ci_duration_ms\":$DURATION_MS,\"node\":\"$(node -v)\",\"pnpm\":\"$(pnpm -v)\",\"log\":\"$LOG\"}" >> "$TEL"
 }
 
 # ── 主流程 ──
-echo "== Gate0 CHECK (v0.2 with Classification + Telemetry) ==" | tee "$LOG"
+echo "== Gate0 CHECK (v0.4 with Classification + Telemetry + Duration) ==" | tee "$LOG"
 echo "pwd: $ROOT" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 echo "📍 Version sources (single source of truth):" | tee -a "$LOG"

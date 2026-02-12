@@ -158,6 +158,13 @@ function buildReport(events) {
   const mttrAvg = mttrDeltas.length
     ? mttrDeltas.reduce((a, b) => a + b, 0) / mttrDeltas.length : NaN;
 
+  // v0.4: CI Duration tracking
+  const ciDurations = checks
+    .map((e) => e.ci_duration_ms)
+    .filter((d) => Number.isFinite(d) && d > 0);
+  const avgCiDurationMs = ciDurations.length
+    ? ciDurations.reduce((a, b) => a + b, 0) / ciDurations.length : NaN;
+
   return {
     total: norm.length,
     firstTs: norm[0]?.ts ?? "—",
@@ -166,14 +173,19 @@ function buildReport(events) {
     failedClassCount, autofixableFailures,
     selfhealAttempts, selfhealSuccess, selfhealByClass,
     mttrAvg, mttrSamples: mttrDeltas.length,
+    avgCiDurationMs, ciDurationSamples: ciDurations.length,
   };
 }
 
 // ══════════════════════════════════════════════════════════
-// Health Score (0-100)
+// Health Score (0-100) — v0.4: 含波动惩罚 S_vol
 // ══════════════════════════════════════════════════════════
 
-function gate0HealthScore(r) {
+/**
+ * @param {object} r - 当前周期聚合数据
+ * @param {number|null} prevScore - 上一周期 Health Score（首次运行传 null）
+ */
+function gate0HealthScore(r, prevScore = null) {
   const failureRate = r.totalChecks ? r.failedChecks / r.totalChecks : 0;
   const selfhealRate = r.selfhealAttempts > 0
     ? r.selfhealSuccess / r.selfhealAttempts : 1;
@@ -186,7 +198,17 @@ function gate0HealthScore(r) {
   const S_cov  = clamp100(100 * Math.max(0, Math.min(1, coverage)));
   const S_mttr = clamp100(100 * (1 - mttrMin / 20));
 
-  const score = 0.35 * S_fail + 0.25 * S_fix + 0.15 * S_cov + 0.25 * S_mttr;
+  // v0.4: 波动惩罚项
+  // 首次运行（无上周数据）= 满分（不惩罚）
+  // Calculate base score without volatility to compare with prevScore
+  const baseScore = 0.30 * S_fail + 0.22 * S_fix + 0.13 * S_cov + 0.25 * S_mttr;
+  const normalizedBase = baseScore / 0.90 * 100; // Scale to 0-100
+  const deltaScore = prevScore !== null ? Math.abs(prevScore - normalizedBase) : 0;
+  const S_vol = clamp100(100 * (1 - deltaScore / 30));
+
+  // v0.4 weights: 30% fail, 22% fix, 13% cov, 25% mttr, 10% vol
+  const score = 0.30 * S_fail + 0.22 * S_fix + 0.13 * S_cov
+              + 0.25 * S_mttr + 0.10 * S_vol;
 
   let band = "Green";
   if (score < 60) band = "Red";
@@ -194,7 +216,8 @@ function gate0HealthScore(r) {
   else if (score < 90) band = "Light Green";
 
   return { score: Math.round(score * 10) / 10, band,
-    parts: { S_fail, S_fix, S_cov, S_mttr } };
+    parts: { S_fail, S_fix, S_cov, S_mttr, S_vol },
+    deltaScore: Math.round(deltaScore * 10) / 10 };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -259,7 +282,8 @@ L.push(``);
 L.push(`## Gate0 Health Score`);
 L.push(`- **Score:** **${hs.score} / 100**`);
 L.push(`- **Band:** **${hs.band}**`);
-L.push(`- Components: fail=${hs.parts.S_fail.toFixed(1)}, fix=${hs.parts.S_fix.toFixed(1)}, coverage=${hs.parts.S_cov.toFixed(1)}, mttr=${hs.parts.S_mttr.toFixed(1)}`);
+L.push(`- Components: fail=${hs.parts.S_fail.toFixed(1)}, fix=${hs.parts.S_fix.toFixed(1)}, coverage=${hs.parts.S_cov.toFixed(1)}, mttr=${hs.parts.S_mttr.toFixed(1)}, volatility=${hs.parts.S_vol.toFixed(1)}`);
+L.push(`- Volatility: Δscore = ${hs.deltaScore} ${hs.deltaScore <= 10 ? "(stable)" : "(unstable ⚠️)"}`);
 L.push(``);
 
 L.push(`## Checks`);
@@ -288,6 +312,19 @@ L.push(``);
 L.push(`## MTTR`);
 L.push(`- Samples: **${report.mttrSamples}**`);
 L.push(`- Average: **${fmtMin(report.mttrAvg)}**`);
+L.push(``);
+
+// v0.4: CI Duration
+function fmtDuration(ms) {
+  if (!Number.isFinite(ms)) return "—";
+  const secs = Math.round(ms / 1000);
+  const mins = Math.floor(secs / 60);
+  const remSecs = secs % 60;
+  return mins > 0 ? `${mins}m${remSecs}s` : `${secs}s`;
+}
+L.push(`## CI Duration`);
+L.push(`- Samples: **${report.ciDurationSamples}**`);
+L.push(`- Average: **${fmtDuration(report.avgCiDurationMs)}**${report.avgCiDurationMs > 300000 ? " 🔴 > 5min" : report.avgCiDurationMs > 180000 ? " ⚠️ > 3min" : ""}`);
 L.push(``);
 
 {

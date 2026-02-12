@@ -75,6 +75,45 @@ function arrow(d, lowerIsBetter = false) {
     (lowerIsBetter ? (up ? " ⚠️" : " ✅") : (up ? " ✅" : " ⚠️"));
 }
 
+// ── v0.4: Tech Debt Hotspot 检测 ──
+
+/**
+ * 检测技术债热点
+ * @param {string[]} weeklyTopClasses - 最近 N 周的 Top 1 failure class（最新在前）
+ *   例如: ["TS_NO_EXPORTED_MEMBER", "TS_NO_EXPORTED_MEMBER", "TS_NO_EXPORTED_MEMBER"]
+ */
+function detectTechDebtHotspot(weeklyTopClasses) {
+  if (weeklyTopClasses.length < 2) return null;
+
+  const current = weeklyTopClasses[0];
+  if (!current) return null;
+
+  // 计算连续周数（从最新周起）
+  let streak = 0;
+  for (const c of weeklyTopClasses) {
+    if (c === current) streak++;
+    else break;
+  }
+
+  if (streak >= 3) {
+    return {
+      level: "HOTSPOT",
+      class: current,
+      weeks: streak,
+      message: `🔥 **Tech Debt Hotspot:** \`${current}\` has been Top 1 failure for **${streak} consecutive weeks**. Schedule structural fix.`,
+    };
+  }
+  if (streak >= 2) {
+    return {
+      level: "EMERGING",
+      class: current,
+      weeks: streak,
+      message: `⚠️ **Emerging Debt:** \`${current}\` has been Top 1 for **${streak} weeks**. Prepare fix plan.`,
+    };
+  }
+  return null;
+}
+
 // ── 主流程 ──
 
 const weekly = read(weeklyPath);
@@ -86,7 +125,13 @@ const mW = parseMttr(weekly),    mP = parseMttr(prev);
 const aW = parseSelfhealPct(weekly), aP = parseSelfhealPct(prev);
 const tW = parseTopClass(weekly), tP = parseTopClass(prev);
 
-const trendBlock = [
+// v0.4: Tech Debt Hotspot detection
+// Note: For full 3+ week detection, we'd need more historical data
+// Here we check this week and last week for a 2-week streak
+const weeklyTopClasses = [tW, tP].filter(Boolean);
+const hotspot = detectTechDebtHotspot(weeklyTopClasses);
+
+const trendLines = [
   `## Trend vs last week`,
   ``,
   `| Metric | This week | Last week | Δ |`,
@@ -97,7 +142,20 @@ const trendBlock = [
   `| Auto-fix success | ${aW != null ? aW + "%" : "—"} | ${aP != null ? aP + "%" : "—"} | ${arrow(delta(aW, aP))} |`,
   `| Top failure class | **${tW ?? "—"}** | ${tP ?? "—"} | ${tW && tP && tW !== tP ? "⚠️ changed" : "same"} |`,
   ``,
-].join("\n");
+];
+
+// v0.4: Add Tech Debt Hotspot warning if detected
+if (hotspot) {
+  trendLines.push(`### 🔥 Technical Debt Alert`);
+  trendLines.push(``);
+  trendLines.push(hotspot.message);
+  trendLines.push(``);
+  trendLines.push(`> This indicates a systemic issue — likely a module boundary or TestHarness design problem.`);
+  trendLines.push(`> Suggested action: schedule a structural fix sprint rather than patching imports.`);
+  trendLines.push(``);
+}
+
+const trendBlock = trendLines.join("\n");
 
 // 插入到标题下方
 const merged = weekly.replace(

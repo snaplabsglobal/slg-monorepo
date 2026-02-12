@@ -17,6 +17,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ── v0.4: 显式分支保护（防止误修 main/release）──
+      - name: Guard protected branches
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          case "$BRANCH" in
+            main|master|release|release/*|production)
+              echo "❌ AutoFix Bot is not allowed to modify branch: $BRANCH"
+              exit 1
+              ;;
+          esac
+          echo "✅ Branch $BRANCH is allowed."
+
       - name: Checkout PR HEAD
         uses: actions/checkout@v4
         with:
