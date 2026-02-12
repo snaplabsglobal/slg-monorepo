@@ -22,7 +22,7 @@ export default defineConfig({
   outputDir: 'test-artifacts',
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3001',
+    baseURL: process.env.BASE_URL || 'http://127.0.0.1:3001',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -60,7 +60,7 @@ export default defineConfig({
     // In dev, use 'pnpm dev' for HMR
     // jss-web runs on port 3001 (ls-web uses 3000)
     command: process.env.CI ? 'pnpm start' : 'pnpm dev',
-    url: 'http://localhost:3001',
+    url: 'http://127.0.0.1:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
