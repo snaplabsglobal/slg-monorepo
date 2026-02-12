@@ -59,10 +59,14 @@ export default defineConfig({
     // In CI, use 'pnpm start' to run the production build
     // In dev, use 'pnpm dev' for HMR
     // jss-web runs on port 3001 (ls-web uses 3000)
+    // Note: cwd is set to ensure the command runs from the correct directory
     command: process.env.CI ? 'pnpm start' : 'pnpm dev',
+    cwd: process.env.CI ? process.cwd() : undefined,
     url: 'http://127.0.0.1:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
     env: {
       // CI must be passed for isTestMode() to work in camera page
       CI: process.env.CI ? 'true' : '',
