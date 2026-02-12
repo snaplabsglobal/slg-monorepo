@@ -14,10 +14,8 @@ import {
 const CURRENT_APP_CODE = process.env.NEXT_PUBLIC_APP_CODE || 'jobsite-snap'
 
 export async function middleware(request: NextRequest) {
-  const { supabase, response } = await createMiddlewareClient(request)
-
-  // Test mode bypass for CI/Playwright tests
-  // Allow /jobs/test-job/camera with harness=1 parameter to bypass auth
+  // Test mode bypass for CI/Playwright tests - MUST be checked BEFORE Supabase init
+  // Allow /jobs/test-job/camera with harness=1 parameter to bypass auth entirely
   // Note: Middleware runs on Edge, so only build-time vars (NEXT_PUBLIC_*) are available
   const isTestRoute =
     request.nextUrl.pathname === '/jobs/test-job/camera' &&
@@ -25,8 +23,11 @@ export async function middleware(request: NextRequest) {
   const isTestModeEnabled = process.env.NEXT_PUBLIC_ALLOW_HARNESS === 'true'
 
   if (isTestRoute && isTestModeEnabled) {
-    return response
+    // Return early without initializing Supabase - avoids requiring env vars in CI
+    return NextResponse.next()
   }
+
+  const { supabase, response } = await createMiddlewareClient(request)
 
   // Refresh session if expired - required for Server Components
   const {
