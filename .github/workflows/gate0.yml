@@ -54,7 +54,7 @@ jobs:
           }
 
       - name: Build jss-web (with dependencies)
-        run: pnpm turbo run build --filter=jss-web
+        run: pnpm turbo run build --filter=jss-web --force
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -109,7 +109,7 @@ jobs:
           }
 
       - name: Build jss-web (with dependencies)
-        run: pnpm turbo run build --filter=jss-web
+        run: pnpm turbo run build --filter=jss-web --force
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -165,7 +165,7 @@ jobs:
           }
 
       - name: Build jss-web (with dependencies)
-        run: pnpm turbo run build --filter=jss-web
+        run: pnpm turbo run build --filter=jss-web --force
         env:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
