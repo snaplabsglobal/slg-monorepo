@@ -76,8 +76,10 @@ jobs:
           curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
 
           echo "=== Gate0A: run ==="
+          echo "CI=$CI"
           pnpm --dir apps/jss-web exec playwright test --project=gate0a
         env:
+          CI: 'true'
           BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -143,8 +145,10 @@ jobs:
           curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
 
           echo "=== Gate0B: run ==="
+          echo "CI=$CI"
           pnpm --dir apps/jss-web exec playwright test --project=gate0b
         env:
+          CI: 'true'
           BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
@@ -211,8 +215,10 @@ jobs:
           curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
 
           echo "=== Gate0C: run ==="
+          echo "CI=$CI"
           pnpm --dir apps/jss-web exec playwright test --project=gate0c
         env:
+          CI: 'true'
           BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
