@@ -59,19 +59,26 @@ jobs:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
-        run: pnpm --filter jss-web exec playwright install --with-deps chromium
-
-      - name: Debug middleware build
-        run: |
-          echo "=== Checking built middleware for test-job bypass ==="
-          grep -o '.\{0,50\}test-job.\{0,50\}' apps/jss-web/.next/server/edge/chunks/*.js 2>/dev/null | head -3 || echo "No test-job in middleware chunks"
-          echo "=== Middleware manifest ==="
-          cat apps/jss-web/.next/server/middleware-manifest.json | head -30
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
 
       - name: Run Gate 0-A tests
-        run: pnpm --filter jss-web exec playwright test --project=gate0a
+        run: |
+          set -euo pipefail
+          echo "=== Gate0A: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          ls -la
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+          test -f apps/jss-web/package.json && echo "OK: apps/jss-web/package.json" || echo "MISSING: apps/jss-web/package.json"
+
+          echo "=== Gate0A: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0A: run ==="
+          pnpm --dir apps/jss-web exec playwright test --project=gate0a
         env:
-          BASE_URL: http://localhost:3001
+          BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
@@ -121,12 +128,24 @@ jobs:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
-        run: pnpm --filter jss-web exec playwright install --with-deps chromium
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
 
       - name: Run Gate 0-B tests
-        run: pnpm --filter jss-web exec playwright test --project=gate0b
+        run: |
+          set -euo pipefail
+          echo "=== Gate0B: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+
+          echo "=== Gate0B: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0B: run ==="
+          pnpm --dir apps/jss-web exec playwright test --project=gate0b
         env:
-          BASE_URL: http://localhost:3001
+          BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload test artifacts
@@ -177,12 +196,24 @@ jobs:
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Install Playwright browsers
-        run: pnpm --filter jss-web exec playwright install --with-deps chromium
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
 
       - name: Run Gate 0-C visual tests
-        run: pnpm --filter jss-web exec playwright test --project=gate0c --update-snapshots
+        run: |
+          set -euo pipefail
+          echo "=== Gate0C: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+
+          echo "=== Gate0C: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0C: run ==="
+          pnpm --dir apps/jss-web exec playwright test --project=gate0c
         env:
-          BASE_URL: http://localhost:3001
+          BASE_URL: http://127.0.0.1:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
 
       - name: Upload visual diff artifacts
