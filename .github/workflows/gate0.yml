@@ -61,13 +61,15 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
 
-      - name: Run Gate 0-A tests
+      - name: Debug middleware build
         run: |
-          cd apps/jss-web
-          echo "=== Debug: Checking built middleware ==="
-          grep -o '.{0,50}test-job.{0,50}' .next/server/edge/chunks/*.js 2>/dev/null | head -3 || echo "No test-job in middleware"
-          echo "=== Debug: Running tests ==="
-          pnpm exec playwright test --project=gate0a
+          echo "=== Checking built middleware for test-job bypass ==="
+          grep -o '.\{0,50\}test-job.\{0,50\}' apps/jss-web/.next/server/edge/chunks/*.js 2>/dev/null | head -3 || echo "No test-job in middleware chunks"
+          echo "=== Middleware manifest ==="
+          cat apps/jss-web/.next/server/middleware-manifest.json | head -30
+
+      - name: Run Gate 0-A tests
+        run: pnpm --filter jss-web exec playwright test --project=gate0a
         env:
           BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
@@ -122,9 +124,7 @@ jobs:
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
 
       - name: Run Gate 0-B tests
-        run: |
-          cd apps/jss-web
-          pnpm exec playwright test --project=gate0b
+        run: pnpm --filter jss-web exec playwright test --project=gate0b
         env:
           BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
@@ -180,9 +180,7 @@ jobs:
         run: pnpm --filter jss-web exec playwright install --with-deps chromium
 
       - name: Run Gate 0-C visual tests
-        run: |
-          cd apps/jss-web
-          pnpm exec playwright test --project=gate0c --update-snapshots
+        run: pnpm --filter jss-web exec playwright test --project=gate0c --update-snapshots
         env:
           BASE_URL: http://localhost:3001
           NEXT_PUBLIC_ALLOW_HARNESS: 'true'
