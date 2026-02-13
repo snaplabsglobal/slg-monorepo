@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "description": "Required P0 contracts that must exist and pass. Missing = BUSINESS_FAIL.",
+  "required_contract_ids": [
+    "BIZ-AUTH-LOGIN-LAND"
+  ]
+}

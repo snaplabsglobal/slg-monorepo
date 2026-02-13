@@ -1,0 +1,41 @@
+{
+  "ui_constitution": {
+    "version": "v1.0",
+    "rules": [
+      {
+        "id": "UI-001",
+        "name": "Critical actions must have data-testid",
+        "severity": "P0",
+        "enforced": true,
+        "description": "All critical business actions must include stable data-testid attributes.",
+        "critical_actions": [
+          "login-email",
+          "login-password",
+          "login-submit",
+          "logout",
+          "create-job",
+          "job-title",
+          "job-submit",
+          "upload-photo",
+          "delete-job",
+          "save-settings"
+        ]
+      },
+      {
+        "id": "UI-002",
+        "name": "data-testid must be semantic and stable",
+        "severity": "P1",
+        "enforced": true,
+        "description": "data-testid must describe business intent, not styling or layout."
+      },
+      {
+        "id": "UI-003",
+        "name": "Critical pages must have data-page-id",
+        "severity": "P1",
+        "enforced": true,
+        "description": "Key business pages must include data-page-id for stable E2E targeting.",
+        "critical_pages": ["jobs-page", "login-page", "dashboard-page"]
+      }
+    ]
+  }
+}

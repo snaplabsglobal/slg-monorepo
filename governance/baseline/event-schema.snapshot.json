@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "extracted_at": "2026-02-13T00:22:08.424Z",
+  "source": "/home/pxjiang/slg-monorepo/.gate0-telemetry/events.jsonl",
+  "event_count": 2,
+  "fields": {
+    "ts": [
+      "string"
+    ],
+    "run_id": [
+      "string"
+    ],
+    "where": [
+      "string"
+    ],
+    "actor": [
+      "string"
+    ],
+    "branch": [
+      "string"
+    ],
+    "sha": [
+      "string"
+    ],
+    "stage": [
+      "string"
+    ],
+    "class": [
+      "string"
+    ],
+    "ok": [
+      "boolean"
+    ],
+    "log": [
+      "string"
+    ]
+  }
+}

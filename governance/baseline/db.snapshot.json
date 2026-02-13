@@ -1,0 +1,238 @@
+{
+  "version": "1.0.0",
+  "extracted_at": "2026-02-13T00:22:08.468Z",
+  "source": "/home/pxjiang/slg-monorepo/supabase/migrations",
+  "migration_count": 46,
+  "migrations": [
+    {
+      "name": "20260119164038_remote_schema.sql",
+      "has_down_section": false,
+      "hash": "2e1ff0fce0343445"
+    },
+    {
+      "name": "20260124000000_ml_training_tables.sql",
+      "has_down_section": false,
+      "hash": "7f94b56b996fdfe0"
+    },
+    {
+      "name": "20260126000000_service_snap_qr.sql",
+      "has_down_section": false,
+      "hash": "57f90356e3e096e0"
+    },
+    {
+      "name": "20260126000001_home_hero_sticker_campaign_migration.sql",
+      "has_down_section": false,
+      "hash": "de37d4d95d038185"
+    },
+    {
+      "name": "20260126000002_incremental_upgrade_migration.sql",
+      "has_down_section": false,
+      "hash": "7aecdfdae99b8e2f"
+    },
+    {
+      "name": "20260127000000_enable_pg_trgm.sql",
+      "has_down_section": false,
+      "hash": "946ed8645444554e"
+    },
+    {
+      "name": "20260127000001_fix_security_linter_errors.sql",
+      "has_down_section": false,
+      "hash": "7b0e71b0b3940e4d"
+    },
+    {
+      "name": "20260127000002_fix_user_creation_trigger.sql",
+      "has_down_section": false,
+      "hash": "7291792ffcbfeb3b"
+    },
+    {
+      "name": "20260127000003_permissions_schema.sql",
+      "has_down_section": false,
+      "hash": "80103c57a403de79"
+    },
+    {
+      "name": "20260127000004_tags_system.sql",
+      "has_down_section": false,
+      "hash": "4a929e89a82b65d9"
+    },
+    {
+      "name": "20260127000006_dual_track_system.sql",
+      "has_down_section": false,
+      "hash": "960e9a24cf81d97e"
+    },
+    {
+      "name": "20260127000007_create_organization_function.sql",
+      "has_down_section": false,
+      "hash": "e16746d04537c5da"
+    },
+    {
+      "name": "20260128000000_gifi_codes_initialization.sql",
+      "has_down_section": false,
+      "hash": "bf2a760586fca081"
+    },
+    {
+      "name": "20260128000001_create_organizations_for_existing_users.sql",
+      "has_down_section": false,
+      "hash": "3a64e67bbcd21c10"
+    },
+    {
+      "name": "20260128000002_disable_rls_temporary.sql",
+      "has_down_section": false,
+      "hash": "dc3da68c9620207b"
+    },
+    {
+      "name": "20260128000003_create_receipt_images_bucket.sql",
+      "has_down_section": false,
+      "hash": "a75e8d0140fb4757"
+    },
+    {
+      "name": "20260129000001_allow_negative_amounts_for_refunds.sql",
+      "has_down_section": false,
+      "hash": "97eebd37fb923cd9"
+    },
+    {
+      "name": "20260129000002_three_layer_deletion_system.sql",
+      "has_down_section": false,
+      "hash": "d97b4c85b9d91b8c"
+    },
+    {
+      "name": "20260129000003_enable_realtime.sql",
+      "has_down_section": false,
+      "hash": "1e97b3ae6af44ac9"
+    },
+    {
+      "name": "20260129000004_duplicate_prevention.sql",
+      "has_down_section": false,
+      "hash": "e86ec806fa52112e"
+    },
+    {
+      "name": "20260130000000_production_ml_vendor_patterns.sql",
+      "has_down_section": false,
+      "hash": "b22413fff7f4c1ca"
+    },
+    {
+      "name": "20260131000000_elegant_user_driven_ml.sql",
+      "has_down_section": false,
+      "hash": "46375d0c4d6576bc"
+    },
+    {
+      "name": "20260131000001_realtime_transactions.sql",
+      "has_down_section": false,
+      "hash": "923908f3392eeca4"
+    },
+    {
+      "name": "20260131000002_fix_record_ml_correction_6params.sql",
+      "has_down_section": false,
+      "hash": "91b091468274eb27"
+    },
+    {
+      "name": "20260131000003_sub_location_and_vendor_branch_phones.sql",
+      "has_down_section": false,
+      "hash": "1699af65a24bda53"
+    },
+    {
+      "name": "20260131000004_record_ml_correction_sub_location.sql",
+      "has_down_section": false,
+      "hash": "87723692dbec3ec9"
+    },
+    {
+      "name": "20260201000000_pending_analysis.sql",
+      "has_down_section": false,
+      "hash": "1e4c520b6fe2bb9f"
+    },
+    {
+      "name": "20260202000000_add_is_verified.sql",
+      "has_down_section": false,
+      "hash": "4538234550a1bcdc"
+    },
+    {
+      "name": "20260202000001_transaction_rescan_jobs.sql",
+      "has_down_section": false,
+      "hash": "6a56d1d80fa9cce9"
+    },
+    {
+      "name": "20260208000000_job_photos_idempotency.sql",
+      "has_down_section": false,
+      "hash": "26af08d19d5ff921"
+    },
+    {
+      "name": "20260208100000_smart_trace_geofence.sql",
+      "has_down_section": false,
+      "hash": "8b86014a3e3f8e2c"
+    },
+    {
+      "name": "20260208300000_disable_rls_jss_tables.sql",
+      "has_down_section": false,
+      "hash": "e5b19508264f2805"
+    },
+    {
+      "name": "20260208400000_jss_pending_photo_analysis.sql",
+      "has_down_section": false,
+      "hash": "91b73a5510910f2e"
+    },
+    {
+      "name": "20260208400001_job_photos_ai_analyzed.sql",
+      "has_down_section": false,
+      "hash": "7c3e635f69dac2c5"
+    },
+    {
+      "name": "20260209000001_add_job_photo_classification.sql",
+      "has_down_section": false,
+      "hash": "3ef3a3647ff52391"
+    },
+    {
+      "name": "20260209100000_add_rescue_status.sql",
+      "has_down_section": false,
+      "hash": "7c0b13b13a0f44e5"
+    },
+    {
+      "name": "20260209110000_rescue_scan_sessions.sql",
+      "has_down_section": false,
+      "hash": "26c32cdd28187a01"
+    },
+    {
+      "name": "20260209120000_rescue_normalized_tables.sql",
+      "has_down_section": false,
+      "hash": "19297f0eda717a86"
+    },
+    {
+      "name": "20260209130000_rescue_tables_rls.sql",
+      "has_down_section": false,
+      "hash": "12885b5b371a1257"
+    },
+    {
+      "name": "20260209150000_backfill_rescue_status.sql",
+      "has_down_section": false,
+      "hash": "6e20727edad416b0"
+    },
+    {
+      "name": "20260210000000_jobs_place_id.sql",
+      "has_down_section": false,
+      "hash": "9c93b362d66e1c2b"
+    },
+    {
+      "name": "20260211000000_core_objects_phase1.sql",
+      "has_down_section": false,
+      "hash": "fdd22fa91f62e68a"
+    },
+    {
+      "name": "20260211000001_transaction_tax_lines.sql",
+      "has_down_section": false,
+      "hash": "2938fe59a45cf9fb"
+    },
+    {
+      "name": "20260211000002_core_objects_refinements.sql",
+      "has_down_section": false,
+      "hash": "7c9e68def8c25f4c"
+    },
+    {
+      "name": "20260211000003_download_audit_events.sql",
+      "has_down_section": true,
+      "hash": "1e963b73e748ca5f"
+    },
+    {
+      "name": "20260212000000_core_project.sql",
+      "has_down_section": false,
+      "hash": "dcecb974b299edc9"
+    }
+  ]
+}
