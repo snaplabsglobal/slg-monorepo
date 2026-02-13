@@ -54,6 +54,17 @@ const nextConfig = {
                     { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
                 ],
             },
+            {
+                // PR-1: Control Tower Evidence Exposure
+                // CORS headers for proof-pack - CEO Control Tower access
+                source: '/proof-pack/:path*',
+                headers: [
+                    { key: 'Access-Control-Allow-Origin', value: 'https://snaplabs.global' },
+                    { key: 'Access-Control-Allow-Methods', value: 'GET, HEAD, OPTIONS' },
+                    { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
+                    { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+                ],
+            },
         ]
     },
     // Set output file tracing root to monorepo root for proper dependency resolution
