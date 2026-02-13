@@ -3,6 +3,10 @@
     "globalDependencies": [
         "**/.env.*local"
     ],
+    "globalEnv": [
+        "NEXT_PUBLIC_ALLOW_HARNESS",
+        "CI"
+    ],
     "pipeline": {
         "build": {
             "dependsOn": [
@@ -12,6 +16,9 @@
                 ".next/**",
                 "!.next/cache/**",
                 "dist/**"
+            ],
+            "env": [
+                "NEXT_PUBLIC_ALLOW_HARNESS"
             ]
         },
         "dev": {

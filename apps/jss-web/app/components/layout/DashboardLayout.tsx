@@ -27,12 +27,12 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, header, hideBottomNav }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[100dvh] overflow-auto bg-gray-50">
       {/* Desktop Sidebar */}
       <Sidebar />
 
       {/* Main content area */}
-      <div className="md:pl-64">
+      <div className="md:pl-64 min-h-[100dvh] flex flex-col">
         {/* Mobile Header */}
         <header className="md:hidden sticky top-0 z-10 bg-white border-b border-gray-200">
           {header || (
@@ -48,8 +48,8 @@ export function DashboardLayout({ children, header, hideBottomNav }: DashboardLa
           )}
         </header>
 
-        {/* Page content */}
-        <main className={`${hideBottomNav ? '' : 'pb-20 md:pb-0'}`}>
+        {/* Page content - pb for BottomNav + safe-area on mobile */}
+        <main className={`flex-1 ${hideBottomNav ? 'pb-[env(safe-area-inset-bottom)]' : 'pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0'}`}>
           {children}
         </main>
       </div>

@@ -42,3 +42,7 @@ ngrok.yml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Gate0 Self-Heal (local logs and telemetry)
+.gate0-logs/
+.gate0-telemetry/

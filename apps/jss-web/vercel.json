@@ -4,5 +4,11 @@
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
-  "ignoreCommand": "cd ../.. && git diff HEAD^ HEAD --quiet apps/jss-web packages/snap-auth packages/snap-types"
+  "ignoreCommand": "cd ../.. && git diff HEAD^ HEAD --quiet apps/jss-web packages/snap-auth packages/snap-types",
+  "crons": [
+    {
+      "path": "/api/photos/analysis/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

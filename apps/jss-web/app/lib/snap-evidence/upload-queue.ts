@@ -132,6 +132,9 @@ class UploadQueue {
       // 5. Set TTL on original blob (7 days from now)
       await setPhotoBlobExpiry(item.id)
 
+      // 6. Register for async AI analysis
+      await this.registerPendingAnalysis(response.file_id)
+
       this.onProgress?.(item, 100)
       this.onComplete?.(item, true)
 
@@ -516,6 +519,27 @@ class UploadQueue {
    */
   getRunningCount(): number {
     return this.running.size
+  }
+
+  /**
+   * Register photo for async AI analysis
+   * Called after successful upload
+   */
+  private async registerPendingAnalysis(photoId: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/photos/${photoId}/pending-analysis`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+
+      if (!res.ok) {
+        // Non-fatal: log but don't fail the upload
+        console.warn(`[Upload] Failed to register analysis for ${photoId}:`, res.status)
+      }
+    } catch (e) {
+      // Non-fatal: analysis can be triggered manually later
+      console.warn(`[Upload] Failed to register analysis for ${photoId}:`, e)
+    }
   }
 
   /**

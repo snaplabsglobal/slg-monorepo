@@ -6,6 +6,12 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+// Force no caching for all responses
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+}
+
 /**
  * GET /api/jobs/[id] - Get job details with photo count and areas/trades
  */
@@ -61,10 +67,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       job_trades: undefined,
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, { headers: NO_CACHE_HEADERS })
   } catch (error) {
     console.error('Job GET error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: NO_CACHE_HEADERS })
   }
 }
 
@@ -95,6 +101,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (body.address !== undefined) {
       updates.address = body.address?.trim() || null
     }
+    if (body.place_id !== undefined) {
+      updates.place_id = body.place_id || null
+    }
+    if (body.geofence_lat !== undefined && body.geofence_lng !== undefined) {
+      updates.geofence_lat = body.geofence_lat
+      updates.geofence_lng = body.geofence_lng
+    }
     if (body.status !== undefined) {
       if (!['active', 'archived'].includes(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
@@ -122,10 +135,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })
     }
 
-    return NextResponse.json(job)
+    return NextResponse.json(job, { headers: NO_CACHE_HEADERS })
   } catch (error) {
     console.error('Job PATCH error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: NO_CACHE_HEADERS })
   }
 }
 
@@ -139,24 +152,51 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401, headers: NO_CACHE_HEADERS })
     }
 
-    // Soft delete
-    const { error: deleteError } = await supabase
+    const deletedAt = new Date().toISOString()
+
+    // Soft delete with count check
+    const { data: deletedJobs, error: deleteError } = await supabase
       .from('jobs')
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: deletedAt })
       .eq('id', id)
       .is('deleted_at', null)
+      .select('id')
+
+    // Log for debugging
+    console.log('[DELETE /api/jobs/:id]', {
+      jobId: id,
+      userId: user.id,
+      deletedCount: deletedJobs?.length ?? 0,
+      error: deleteError?.message ?? null,
+    })
 
     if (deleteError) {
       console.error('Error deleting job:', deleteError)
-      return NextResponse.json({ error: 'Failed to delete job' }, { status: 500 })
+      return NextResponse.json(
+        { ok: false, error: 'Failed to delete job', details: deleteError.message },
+        { status: 500, headers: NO_CACHE_HEADERS }
+      )
     }
 
-    return NextResponse.json({ success: true })
+    if (!deletedJobs || deletedJobs.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: 'Job not found or already deleted' },
+        { status: 404, headers: NO_CACHE_HEADERS }
+      )
+    }
+
+    return NextResponse.json(
+      { ok: true, deletedId: id, deletedAt, deletedCount: deletedJobs.length },
+      { headers: NO_CACHE_HEADERS }
+    )
   } catch (error) {
     console.error('Job DELETE error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500, headers: NO_CACHE_HEADERS }
+    )
   }
 }

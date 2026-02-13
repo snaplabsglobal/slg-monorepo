@@ -17,6 +17,7 @@
     "@google/generative-ai": "^0.21.0",
     "@slo/shared-utils": "workspace:^",
     "@slo/snap-auth": "workspace:^",
+    "@slo/snap-types": "workspace:^",
     "@supabase/supabase-js": "^2.93.0",
     "next": "16.1.1",
     "react": "19.2.3",

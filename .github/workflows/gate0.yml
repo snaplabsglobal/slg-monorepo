@@ -1,0 +1,263 @@
+name: Gate 0 - Full Suite
+
+on:
+  pull_request:
+    paths:
+      - 'apps/jss-web/**'
+      - 'packages/**'
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  CI: true
+  # Enable TestHarness in CI builds for Playwright tests
+  NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+  # Dummy Supabase values for CI - tests bypass auth via harness mode
+  NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321'
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+
+jobs:
+  gate0-a-data:
+    name: "Gate 0-A: Data / Queue / Evidence"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm (from packageManager)
+        uses: pnpm/action-setup@v2
+        # version is read from package.json#packageManager
+
+      - name: Setup Node.js (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            echo ""
+            echo "Quick fix:"
+            echo "  pnpm install"
+            echo "  git add pnpm-lock.yaml"
+            echo "  git commit -m 'chore: sync lockfile'"
+            echo "  git push"
+            exit 1
+          }
+
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web --force
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Install Playwright browsers
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-A tests
+        run: |
+          set -euo pipefail
+          echo "=== Gate0A: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          ls -la
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+          test -f apps/jss-web/package.json && echo "OK: apps/jss-web/package.json" || echo "MISSING: apps/jss-web/package.json"
+
+          echo "=== Gate0A: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0A: run ==="
+          echo "CI=$CI"
+          pnpm --dir apps/jss-web exec playwright test --project=gate0a
+        env:
+          CI: 'true'
+          BASE_URL: http://127.0.0.1:3001
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0a-results
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-artifacts/
+          retention-days: 7
+
+  gate0-b-ui:
+    name: "Gate 0-B: UI / Interaction / Routing"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm (from packageManager)
+        uses: pnpm/action-setup@v2
+        # version is read from package.json#packageManager
+
+      - name: Setup Node.js (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            exit 1
+          }
+
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web --force
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Install Playwright browsers
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-B tests
+        run: |
+          set -euo pipefail
+          echo "=== Gate0B: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+
+          echo "=== Gate0B: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0B: run ==="
+          echo "CI=$CI"
+          pnpm --dir apps/jss-web exec playwright test --project=gate0b
+        env:
+          CI: 'true'
+          BASE_URL: http://127.0.0.1:3001
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0b-results
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-artifacts/
+          retention-days: 7
+
+  gate0-c-visual:
+    name: "Gate 0-C: Visual Regression"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true # Visual tests don't block merge
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm (from packageManager)
+        uses: pnpm/action-setup@v2
+        # version is read from package.json#packageManager
+
+      - name: Setup Node.js (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile || {
+            echo ""
+            echo "::error::❌ Lockfile out of sync!"
+            echo "::error::Run 'pnpm install' locally and commit pnpm-lock.yaml"
+            exit 1
+          }
+
+      - name: Build jss-web (with dependencies)
+        run: pnpm turbo run build --filter=jss-web --force
+        env:
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Install Playwright browsers
+        run: pnpm --dir apps/jss-web exec playwright install --with-deps chromium
+
+      - name: Run Gate 0-C visual tests
+        run: |
+          set -euo pipefail
+          echo "=== Gate0C: env diag ==="
+          pwd
+          node -v
+          pnpm -v
+          test -f apps/jss-web/playwright.config.ts && echo "OK: playwright.config.ts" || echo "MISSING: playwright.config.ts"
+
+          echo "=== Gate0C: smoke curl (non-fatal) ==="
+          curl -sS -I "${BASE_URL:-http://127.0.0.1:3001}" || true
+
+          echo "=== Gate0C: run ==="
+          echo "CI=$CI"
+          pnpm --dir apps/jss-web exec playwright test --project=gate0c
+        env:
+          CI: 'true'
+          BASE_URL: http://127.0.0.1:3001
+          NEXT_PUBLIC_ALLOW_HARNESS: 'true'
+
+      - name: Upload visual diff artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0c-visual-diff
+          path: |
+            apps/jss-web/playwright-report/
+            apps/jss-web/test-results/
+          retention-days: 7
+
+  gate0-summary:
+    name: "Gate 0 Summary"
+    runs-on: ubuntu-latest
+    needs: [gate0-a-data, gate0-b-ui, gate0-c-visual]
+    if: always()
+
+    steps:
+      - name: Check Gate 0-A result
+        if: needs.gate0-a-data.result != 'success'
+        run: |
+          echo "::error::Gate 0-A (Data/Queue/Evidence) failed!"
+          exit 1
+
+      - name: Check Gate 0-B result
+        if: needs.gate0-b-ui.result != 'success'
+        run: |
+          echo "::error::Gate 0-B (UI/Interaction/Routing) failed!"
+          exit 1
+
+      - name: Gate 0 Passed
+        run: |
+          echo "✅ Gate 0-A: PASSED"
+          echo "✅ Gate 0-B: PASSED"
+          echo "ℹ️ Gate 0-C: ${{ needs.gate0-c-visual.result }} (visual regression, non-blocking)"
+          echo ""
+          echo "🎉 Gate 0 verification complete!"

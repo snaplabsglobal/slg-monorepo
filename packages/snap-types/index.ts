@@ -5,6 +5,9 @@
 // Auth and permissions
 export * from './src/auth'
 
+// Core Objects (SLG_Strategy_Pivot_CTO_Brief_v1.4)
+export * from './src/core'
+
 // Receipt types (shared across LS and JSS)
 export interface Receipt {
     id: string;

@@ -637,6 +637,58 @@ export async function getStatusCounts(): Promise<Record<PhotoStatus, number>> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DEBUG PANEL FUNCTIONS (CTO Directive E)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Queue statistics for debug panel
+ */
+export interface QueueStats {
+  total: number
+  pending: number
+  uploading: number
+  uploaded: number
+  failed: number
+}
+
+/**
+ * Get queue statistics for debug panel
+ * One-call summary of all photo statuses
+ */
+export async function getQueueStats(): Promise<QueueStats> {
+  const counts = await getStatusCounts()
+  return {
+    total: counts.pending + counts.uploading + counts.uploaded + counts.failed,
+    pending: counts.pending,
+    uploading: counts.uploading,
+    uploaded: counts.uploaded,
+    failed: counts.failed,
+  }
+}
+
+/**
+ * List all photos in local store
+ * For debug panel: dump queue, find errors, etc.
+ */
+export async function listAllPhotos(): Promise<PhotoItem[]> {
+  const db = await getDB()
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, 'readonly')
+    const store = tx.objectStore(STORE_ITEMS)
+    const request = store.getAll()
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const items = request.result as PhotoItem[]
+      // Sort by taken_at descending (newest first)
+      items.sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime())
+      resolve(items)
+    }
+  })
+}
+
 /**
  * Create thumbnail from blob
  */
