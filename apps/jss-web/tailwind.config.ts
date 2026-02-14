@@ -5,6 +5,9 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    // Include snap-auth package components for Tailwind to scan
+    "../../packages/snap-auth/src/**/*.{js,ts,jsx,tsx}",
+    "../../packages/snap-auth/dist/**/*.{js,mjs}",
   ],
   theme: {
     extend: {
