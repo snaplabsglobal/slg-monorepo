@@ -18,7 +18,8 @@
         "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
         "deploy:fix": "./scripts/auto-fix.sh",
         "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts",
-        "jss:doctor": "tsx scripts/jss-doctor.ts"
+        "jss:doctor": "tsx scripts/jss-doctor.ts",
+        "jss:gate0": "tsx scripts/jss-gate0.ts"
     },
     "devDependencies": {
         "@types/node": "^20.19.30",
