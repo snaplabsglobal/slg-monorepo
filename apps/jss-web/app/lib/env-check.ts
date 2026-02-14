@@ -144,7 +144,7 @@ export function assertEnv(): void {
  * Get upload provider based on env config
  * Returns explicit provider, never guesses
  */
-export function getUploadProvider(): 'r2' | 'not_configured' {
+export function getUploadProvider(): 'r2' | 'mock' | 'not_configured' {
   const hasR2 = !!(
     process.env.CLOUDFLARE_ACCOUNT_ID &&
     process.env.R2_BUCKET_SNAP_EVIDENCE &&
@@ -154,5 +154,11 @@ export function getUploadProvider(): 'r2' | 'not_configured' {
   )
 
   if (hasR2) return 'r2'
+
+  // In development, use mock storage as fallback
+  if (process.env.NODE_ENV === 'development') {
+    return 'mock'
+  }
+
   return 'not_configured'
 }

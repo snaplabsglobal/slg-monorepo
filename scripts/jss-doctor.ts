@@ -194,6 +194,15 @@ function checkStorageConfig(runtime: RuntimeFingerprint): DivergenceCheck {
     }
   }
 
+  // Mock storage is OK for local development
+  if (runtime.storage.upload.provider === 'mock') {
+    return {
+      code: 'storage_config',
+      status: 'PASS',
+      reason: 'Storage ready: mock (in-memory, local dev only)',
+    }
+  }
+
   if (!runtime.storage.r2.isConfigured) {
     return {
       code: 'storage_config',

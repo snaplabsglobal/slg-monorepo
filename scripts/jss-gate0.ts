@@ -221,7 +221,7 @@ async function gateB_StorageConfig(baseUrl: string, target: Target): Promise<Gat
     }
   }
 
-  // For local: warn if not configured, but don't fail
+  // For local: mock storage is acceptable
   if (target === 'local') {
     if (!storage.upload.ready) {
       status = 'WARN'
@@ -230,6 +230,9 @@ async function gateB_StorageConfig(baseUrl: string, target: Target): Promise<Gat
       if (storage.upload.error) {
         details.push(`  Missing: ${storage.upload.error}`)
       }
+    } else if (storage.upload.provider === 'mock') {
+      details.push('upload_ready: true (MOCK) ✓')
+      details.push('  Using in-memory mock storage for local development')
     } else {
       details.push('upload_ready: true ✓')
       details.push(`r2_bucket: ${storage.r2.bucket}`)

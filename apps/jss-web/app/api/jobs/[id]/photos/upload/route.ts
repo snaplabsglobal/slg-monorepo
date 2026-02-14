@@ -5,6 +5,7 @@ import {
   buildR2Key,
 } from '@/lib/snap-evidence/r2-storage'
 import { getUploadProvider } from '@/lib/env-check'
+import { shouldUseMockStorage, generateMockPresignedUrl } from '@/lib/storage/mock-storage'
 import type { PhotoUploadRequest, PhotoUploadResponse } from '@/lib/types'
 
 interface RouteContext {
@@ -27,25 +28,15 @@ interface RouteContext {
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    // CTO Requirement D: Explicit check, no silent fallback
+    // Check storage provider
     const uploadProvider = getUploadProvider()
-    if (uploadProvider === 'not_configured') {
-      console.error('[SnapEvidence] Upload failed: R2 storage not configured')
-      return NextResponse.json(
-        {
-          error: 'Storage not configured',
-          code: 'STORAGE_NOT_CONFIGURED',
-          details: 'Photo uploads require R2 storage configuration. Check environment variables.',
-          required: [
-            'CLOUDFLARE_ACCOUNT_ID',
-            'R2_BUCKET_SNAP_EVIDENCE',
-            'R2_ACCESS_KEY_ID',
-            'R2_SECRET_ACCESS_KEY',
-            'R2_PUBLIC_URL_SNAP_EVIDENCE',
-          ],
-        },
-        { status: 503 }
-      )
+    const useMockStorage = shouldUseMockStorage()
+
+    // Log which storage mode we're using
+    if (useMockStorage) {
+      console.log('[SnapEvidence] Using MOCK storage (R2 not configured)')
+    } else {
+      console.log('[SnapEvidence] Using R2 storage')
     }
 
     const { id: jobId } = await context.params
@@ -112,19 +103,40 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Generate presigned URL using stable key
-    const { presignedUrl, fileUrl, bucket } = await generatePresignedUrlForKey(
-      r2Key,
-      contentType,
-      3600, // 1 hour expiry
-      {
-        'x-amz-meta-job-id': jobId,
-        'x-amz-meta-org-id': job.organization_id,
-        'x-amz-meta-user-id': user.id,
-        'x-amz-meta-photo-id': photoId,
-      }
-    )
+    let presignedUrl: string
+    let fileUrl: string
+    let bucket: string
 
-    console.log(`[SnapEvidence] Presigned URL generated: bucket=${bucket}, key=${r2Key}`)
+    if (useMockStorage) {
+      // Use mock storage for local development
+      const mockResult = generateMockPresignedUrl(r2Key, contentType, {
+        'job-id': jobId,
+        'org-id': job.organization_id,
+        'user-id': user.id,
+        'photo-id': photoId,
+      })
+      presignedUrl = mockResult.presignedUrl
+      fileUrl = mockResult.fileUrl
+      bucket = mockResult.bucket
+      console.log(`[MockStorage] Presigned URL generated: bucket=${bucket}, key=${r2Key}`)
+    } else {
+      // Use real R2 storage
+      const r2Result = await generatePresignedUrlForKey(
+        r2Key,
+        contentType,
+        3600, // 1 hour expiry
+        {
+          'x-amz-meta-job-id': jobId,
+          'x-amz-meta-org-id': job.organization_id,
+          'x-amz-meta-user-id': user.id,
+          'x-amz-meta-photo-id': photoId,
+        }
+      )
+      presignedUrl = r2Result.presignedUrl
+      fileUrl = r2Result.fileUrl
+      bucket = r2Result.bucket
+      console.log(`[SnapEvidence] Presigned URL generated: bucket=${bucket}, key=${r2Key}`)
+    }
 
     const response: PhotoUploadResponse = {
       presignedUrl,

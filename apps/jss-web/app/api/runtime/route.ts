@@ -55,9 +55,10 @@ function getStorageDiagnostics() {
   const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || ''
   const r2AccessKey = process.env.R2_ACCESS_KEY_ID || ''
   const r2PublicUrl = process.env.R2_PUBLIC_URL_SNAP_EVIDENCE || ''
+  const isDevelopment = process.env.NODE_ENV === 'development'
 
   // Storage provider determination - explicit, no fallback
-  let uploadProvider: 'r2' | 'not_configured'
+  let uploadProvider: 'r2' | 'mock' | 'not_configured'
   let uploadReady: boolean
   const missingEnvVars: string[] = []
 
@@ -69,6 +70,10 @@ function getStorageDiagnostics() {
 
   if (missingEnvVars.length === 0) {
     uploadProvider = 'r2'
+    uploadReady = true
+  } else if (isDevelopment) {
+    // In development, mock storage is available as fallback
+    uploadProvider = 'mock'
     uploadReady = true
   } else {
     uploadProvider = 'not_configured'
