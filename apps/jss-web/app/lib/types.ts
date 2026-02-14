@@ -17,6 +17,11 @@ export interface Job {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  // Address standardization (Google Places)
+  place_id?: string | null
+  // Geofence (for Smart Trace / Magic Import)
+  geofence_lat?: number | null
+  geofence_lng?: number | null
   // Computed fields (from queries)
   photo_count?: number
   last_photo_at?: string | null
@@ -71,11 +76,17 @@ export interface JobTrade {
 export interface CreateJobRequest {
   name: string
   address?: string
+  place_id?: string
+  geofence_lat?: number
+  geofence_lng?: number
 }
 
 export interface UpdateJobRequest {
   name?: string
   address?: string
+  place_id?: string
+  geofence_lat?: number
+  geofence_lng?: number
   status?: JobStatus
 }
 

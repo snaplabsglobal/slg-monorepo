@@ -17,14 +17,17 @@
         "quick-check": "pnpm type-check",
         "deploy:watch": "git push origin dev && ./scripts/deploy-monitor.sh",
         "deploy:fix": "./scripts/auto-fix.sh",
-        "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts"
+        "enqueue-cloud-rescan": "tsx scripts/enqueue-cloud-rescan.ts",
+        "jss:doctor": "tsx scripts/jss-doctor.ts",
+        "jss:gate0": "tsx scripts/jss-gate0.ts"
     },
     "devDependencies": {
-        "husky": "^9.1.7",
         "@types/node": "^20.19.30",
         "@types/react": "^19.2.9",
         "@types/react-dom": "^19.2.3",
+        "husky": "^9.1.7",
         "prettier": "^3.8.1",
+        "tsx": "^4.21.0",
         "turbo": "^1.13.4",
         "typescript": "^5.9.3"
     },
