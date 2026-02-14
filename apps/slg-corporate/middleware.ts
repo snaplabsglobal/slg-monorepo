@@ -76,7 +76,10 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - ceo (CEO Control Tower - no auth required)
+     * - api/ceo (CEO API endpoints - no auth required)
+     * - proof-pack (public evidence exposure)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|ceo|api/ceo|proof-pack|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
