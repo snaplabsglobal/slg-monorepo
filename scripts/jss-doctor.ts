@@ -30,7 +30,10 @@ type Target = keyof typeof TARGETS
 interface RuntimeFingerprint {
   app: string
   git_sha: string
+  git_branch: string
   build_id: string
+  env: string
+  vercel_env: string
   public_env_fingerprint: string
   feature_flags_fingerprint: string
   feature_flags: {
@@ -38,12 +41,17 @@ interface RuntimeFingerprint {
     import: boolean
     smart_trace: boolean
   }
-  sw: { expected_version: string }
-  storage_targets: {
-    supabase_url_hint: string
-    r2_bucket_hint: string
+  storage: {
+    supabase: { url: string; isLocal: boolean; isConfigured: boolean }
+    r2: { bucket: string; isConfigured: boolean; missingEnvVars: string[] }
+    upload: { provider: string; ready: boolean; error: string | null }
   }
-  env: string
+  auth: {
+    supabaseConfigured: boolean
+    redirectUrl: string
+    supabaseProject: string
+  }
+  sw: { expected_version: string }
   timestamp: string
 }
 
@@ -166,6 +174,63 @@ async function checkMockPathHit(baseUrl: string): Promise<DivergenceCheck> {
   }
 
   return { code: 'mock_path_hit', status: 'PASS', reason: 'No mock-v2 paths active' }
+}
+
+function checkStorageConfig(runtime: RuntimeFingerprint): DivergenceCheck {
+  // Check if storage is properly configured
+  if (!runtime.storage) {
+    return {
+      code: 'storage_config',
+      status: 'WARN',
+      reason: 'Storage diagnostics not available (old runtime version)',
+    }
+  }
+
+  if (!runtime.storage.upload.ready) {
+    return {
+      code: 'storage_config',
+      status: 'FAIL',
+      reason: `Upload not ready: ${runtime.storage.upload.error || 'unknown error'}`,
+    }
+  }
+
+  if (!runtime.storage.r2.isConfigured) {
+    return {
+      code: 'storage_config',
+      status: 'FAIL',
+      reason: `R2 not configured. Missing: ${runtime.storage.r2.missingEnvVars.join(', ')}`,
+    }
+  }
+
+  return {
+    code: 'storage_config',
+    status: 'PASS',
+    reason: `Storage ready: ${runtime.storage.upload.provider} (${runtime.storage.r2.bucket})`,
+  }
+}
+
+function checkAuthConfig(runtime: RuntimeFingerprint): DivergenceCheck {
+  if (!runtime.auth) {
+    return {
+      code: 'auth_config',
+      status: 'WARN',
+      reason: 'Auth diagnostics not available (old runtime version)',
+    }
+  }
+
+  if (!runtime.auth.supabaseConfigured) {
+    return {
+      code: 'auth_config',
+      status: 'FAIL',
+      reason: 'Supabase auth not configured',
+    }
+  }
+
+  return {
+    code: 'auth_config',
+    status: 'PASS',
+    reason: `Auth configured: ${runtime.auth.supabaseProject}`,
+  }
 }
 
 // ============================================================================
@@ -330,12 +395,29 @@ async function runDoctor(target: Target) {
 
   console.log(`app: ${runtime.app}`)
   console.log(`git_sha: ${runtime.git_sha}`)
-  console.log(`build_id: ${runtime.build_id}`)
+  console.log(`git_branch: ${runtime.git_branch}`)
+  console.log(`env: ${runtime.env} / ${runtime.vercel_env}`)
   console.log(`public_env_fingerprint: ${runtime.public_env_fingerprint}`)
   console.log(`feature_flags_fingerprint: ${runtime.feature_flags_fingerprint}`)
   console.log(`feature_flags:`, runtime.feature_flags)
-  console.log(`storage_targets:`, runtime.storage_targets)
-  console.log(`env: ${runtime.env}`)
+
+  // Storage diagnostics (CTO requirement)
+  console.log('')
+  console.log(`${colors.bold}Storage:${colors.reset}`)
+  console.log(`  upload_provider: ${runtime.storage?.upload?.provider || 'unknown'}`)
+  console.log(`  upload_ready: ${runtime.storage?.upload?.ready || false}`)
+  console.log(`  r2_bucket: ${runtime.storage?.r2?.bucket || 'NOT_SET'}`)
+  console.log(`  r2_configured: ${runtime.storage?.r2?.isConfigured || false}`)
+  if (runtime.storage?.upload?.error) {
+    console.log(`  ${colors.red}upload_error: ${runtime.storage.upload.error}${colors.reset}`)
+  }
+
+  // Auth diagnostics (CTO requirement)
+  console.log('')
+  console.log(`${colors.bold}Auth:${colors.reset}`)
+  console.log(`  supabase_project: ${runtime.auth?.supabaseProject || 'unknown'}`)
+  console.log(`  supabase_configured: ${runtime.auth?.supabaseConfigured || false}`)
+  console.log(`  redirect_url: ${runtime.auth?.redirectUrl || 'NOT_SET'}`)
 
   // 2. Divergence checks (single target)
   console.log(header('Divergence Checks'))
@@ -343,6 +425,8 @@ async function runDoctor(target: Target) {
 
   checks.push(checkWrongApp(runtime))
   checks.push(await checkMockPathHit(baseUrl))
+  checks.push(checkStorageConfig(runtime))
+  checks.push(checkAuthConfig(runtime))
 
   for (const check of checks) {
     if (check.status === 'PASS') console.log(pass(`[${check.code}] ${check.reason}`))

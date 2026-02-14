@@ -4,6 +4,7 @@ import {
   generatePresignedUrlForKey,
   buildR2Key,
 } from '@/lib/snap-evidence/r2-storage'
+import { getUploadProvider } from '@/lib/env-check'
 import type { PhotoUploadRequest, PhotoUploadResponse } from '@/lib/types'
 
 interface RouteContext {
@@ -26,6 +27,27 @@ interface RouteContext {
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    // CTO Requirement D: Explicit check, no silent fallback
+    const uploadProvider = getUploadProvider()
+    if (uploadProvider === 'not_configured') {
+      console.error('[SnapEvidence] Upload failed: R2 storage not configured')
+      return NextResponse.json(
+        {
+          error: 'Storage not configured',
+          code: 'STORAGE_NOT_CONFIGURED',
+          details: 'Photo uploads require R2 storage configuration. Check environment variables.',
+          required: [
+            'CLOUDFLARE_ACCOUNT_ID',
+            'R2_BUCKET_SNAP_EVIDENCE',
+            'R2_ACCESS_KEY_ID',
+            'R2_SECRET_ACCESS_KEY',
+            'R2_PUBLIC_URL_SNAP_EVIDENCE',
+          ],
+        },
+        { status: 503 }
+      )
+    }
+
     const { id: jobId } = await context.params
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
