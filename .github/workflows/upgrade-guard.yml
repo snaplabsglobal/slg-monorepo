@@ -1,0 +1,339 @@
+# SLG Upgrade Guard v1.1 (Dual-Valve Automatic Approval)
+# Document: SLG_Infra_Upgrade_Risk_Assessment_v1.1 §7.4
+#
+# This workflow automatically blocks infrastructure upgrade PRs that don't meet
+# the required stability criteria:
+# - Valve A: Health Score >= 85
+# - Valve B: No new failure class outbreak
+#
+# Both valves must pass for the upgrade PR to be allowed to merge.
+
+name: Upgrade Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  guard:
+    name: upgrade Guard
+    runs-on: ubuntu-latest
+    env:
+      HEALTH_MIN: "85"
+      OUTBREAK_THRESH: "5"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ═══════════════════════════════════════════
+      # 1. Detect upgrade PR
+      # ═══════════════════════════════════════════
+      - name: Detect upgrade PR
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="${{ github.event.pull_request.title }}"
+          BODY="${{ github.event.pull_request.body }}"
+          BRANCH="${{ github.head_ref }}"
+
+          if echo "$TITLE $BODY $BRANCH" | grep -Eiq "(upgrade|node|pnpm|next|typescript|turbopack)"; then
+            echo "upgrade=true" >> $GITHUB_OUTPUT
+            echo "Detected upgrade PR."
+          else
+            echo "upgrade=false" >> $GITHUB_OUTPUT
+            echo "Not an upgrade PR; skipping guard."
+          fi
+
+      - name: Skip if not upgrade
+        if: steps.detect.outputs.upgrade == 'false'
+        run: echo "Skip."
+
+      # ═══════════════════════════════════════════
+      # 2. Check Risk Assessment Form
+      # ═══════════════════════════════════════════
+      - name: Check Risk Assessment Form
+        if: steps.detect.outputs.upgrade == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            if (!body.includes("Infra Upgrade Assessment Form")) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: [
+                  "❌ **Upgrade Guard: Missing Risk Assessment Form**",
+                  "",
+                  "This PR appears to be an infrastructure upgrade but does not contain the required `Infra Upgrade Assessment Form`.",
+                  "",
+                  "Please add the form to the PR description. See `docs/ops/infra-upgrade-policy.md` §二 for the template.",
+                ].join("\n"),
+              });
+              core.setFailed("Missing Infra Upgrade Assessment Form");
+            } else {
+              core.info("✅ Risk Assessment Form found.");
+            }
+
+      # ═══════════════════════════════════════════
+      # 3. Setup environment + download telemetry artifacts
+      # ═══════════════════════════════════════════
+      - name: Setup Node
+        if: steps.detect.outputs.upgrade == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.upgrade == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: "8.15.0"
+
+      - name: Install deps
+        if: steps.detect.outputs.upgrade == 'true'
+        run: pnpm -w install --frozen-lockfile
+
+      - name: Download recent gate0-telemetry artifacts
+        if: steps.detect.outputs.upgrade == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          echo "Fetching gate0-telemetry artifacts..."
+          ART_IDS=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --paginate \
+            --jq '.artifacts[] | select(.name=="gate0-telemetry") | .id' \
+            | head -n 200)
+
+          if [ -z "$ART_IDS" ]; then
+            echo "No gate0-telemetry artifacts found."
+            exit 1
+          fi
+
+          i=0
+          for id in $ART_IDS; do
+            i=$((i+1))
+            echo "Downloading artifact $id (#$i)..."
+            mkdir -p artifacts/$id
+            gh api repos/${{ github.repository }}/actions/artifacts/$id/zip \
+              > artifacts/$id.zip || true
+            if [ -s artifacts/$id.zip ]; then
+              unzip -o artifacts/$id.zip -d artifacts/$id >/dev/null || true
+              rm -f artifacts/$id.zip
+            fi
+          done
+
+      # ═══════════════════════════════════════════
+      # 4. Generate this week + prev week reports (real-time calculation)
+      # ═══════════════════════════════════════════
+      - name: Generate reports (this week vs prev week)
+        if: steps.detect.outputs.upgrade == 'true'
+        id: gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+
+          UNTIL=$(date -u +%FT%TZ)
+          SINCE=$(date -u -d "7 days ago" +%FT%TZ)
+          PREV_UNTIL=$SINCE
+          PREV_SINCE=$(date -u -d "14 days ago" +%FT%TZ)
+
+          echo "This week:  $SINCE -> $UNTIL"
+          echo "Prev week:  $PREV_SINCE -> $PREV_UNTIL"
+
+          node scripts/gate0-report.mjs artifacts/ \
+            --since "$SINCE" --until "$UNTIL" > out/this-week.md
+          node scripts/gate0-report.mjs artifacts/ \
+            --since "$PREV_SINCE" --until "$PREV_UNTIL" > out/prev-week.md
+
+          # Extract machine-readable labels
+          THIS_SCORE=$(grep -E '^HEALTH_SCORE=' out/this-week.md \
+            | head -n 1 | cut -d= -f2 || true)
+          PREV_SCORE=$(grep -E '^HEALTH_SCORE=' out/prev-week.md \
+            | head -n 1 | cut -d= -f2 || true)
+          THIS_TOP=$(grep -E '^TOP_FAILURES=' out/this-week.md \
+            | head -n 1 | cut -d= -f2 || true)
+          PREV_TOP=$(grep -E '^TOP_FAILURES=' out/prev-week.md \
+            | head -n 1 | cut -d= -f2 || true)
+
+          if [ -z "$THIS_SCORE" ]; then
+            echo "Could not extract HEALTH_SCORE."
+            sed -n '1,60p' out/this-week.md || true
+            exit 1
+          fi
+
+          echo "this_score=$THIS_SCORE" >> $GITHUB_OUTPUT
+          echo "prev_score=$PREV_SCORE" >> $GITHUB_OUTPUT
+          echo "this_top=$THIS_TOP" >> $GITHUB_OUTPUT
+          echo "prev_top=$PREV_TOP" >> $GITHUB_OUTPUT
+
+          echo "This score: $THIS_SCORE (prev: ${PREV_SCORE:-N/A})"
+
+      - name: Upload guard reports
+        if: steps.detect.outputs.upgrade == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate0-guard-reports
+          path: |
+            out/this-week.md
+            out/prev-week.md
+
+      # ═══════════════════════════════════════════
+      # 5. Valve A: Health Score >= 85
+      # ═══════════════════════════════════════════
+      - name: "Valve A: Enforce Health Score >= 85"
+        if: steps.detect.outputs.upgrade == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - << 'PY'
+          import os, sys
+          score = float(os.environ["SCORE"])
+          minv  = float(os.environ["MIN"])
+          print(f"Health Score: {score} (min: {minv})")
+          if score < minv:
+              print(f"FAIL: {score} < {minv}")
+              sys.exit(1)
+          print("PASS")
+          PY
+        env:
+          SCORE: ${{ steps.gates.outputs.this_score }}
+          MIN: ${{ env.HEALTH_MIN }}
+
+      # ═══════════════════════════════════════════
+      # 6. Valve B: No new failure class outbreak
+      # ═══════════════════════════════════════════
+      - name: "Valve B: No new failure class outbreak"
+        if: steps.detect.outputs.upgrade == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - << 'PY'
+          import os, sys
+
+          def parse(s):
+              out = {}
+              if not s:
+                  return out
+              for part in s.split(","):
+                  part = part.strip()
+                  if ":" not in part:
+                      continue
+                  k, v = part.split(":", 1)
+                  try:
+                      out[k.strip()] = int(v.strip())
+                  except ValueError:
+                      pass
+              return out
+
+          this = parse(os.environ.get("THIS", ""))
+          prev = parse(os.environ.get("PREV", ""))
+          thresh = int(os.environ.get("THRESH", "5"))
+
+          # New class = in this week but not in prev week
+          new_classes = [(k, this[k]) for k in this if k not in prev]
+
+          # Outbreak = new class with count >= threshold
+          outbreaks = [(k, c) for k, c in new_classes if c >= thresh]
+
+          print(f"This week classes: {this}")
+          print(f"Prev week classes: {prev}")
+          print(f"New classes: {new_classes}")
+          print(f"Outbreaks (>= {thresh}): {outbreaks}")
+
+          if outbreaks:
+              for k, c in outbreaks:
+                  print(f"OUTBREAK: {k} (count={c})")
+              sys.exit(1)
+
+          print("PASS: No new failure class outbreak.")
+          PY
+        env:
+          THIS: ${{ steps.gates.outputs.this_top }}
+          PREV: ${{ steps.gates.outputs.prev_top }}
+          THRESH: ${{ env.OUTBREAK_THRESH }}
+
+      # ═══════════════════════════════════════════
+      # 7. Check Shadow CI (for risk >= 3)
+      # ═══════════════════════════════════════════
+      - name: Check Shadow CI for high-risk upgrades
+        if: steps.detect.outputs.upgrade == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const riskMatch = body.match(/风险分数[:\s|]*(\d+)/);
+            const risk = riskMatch ? Number(riskMatch[1]) : null;
+
+            if (risk === null) {
+              core.warning("Could not parse risk score from PR body.");
+              return;
+            }
+
+            if (risk >= 3) {
+              if (!body.match(/Shadow CI enabled[:\s|]*true/i)) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `❌ **Upgrade Guard: Shadow CI required**\n\nRisk score: **${risk}** (≥ 3)\n\nEnable Shadow CI and mark \`Shadow CI enabled: true\` in the assessment form.`,
+                });
+                core.setFailed(`Risk ${risk} >= 3, Shadow CI not enabled`);
+              } else {
+                core.info(`✅ Risk ${risk}, Shadow CI enabled.`);
+              }
+            } else {
+              core.info(`✅ Risk ${risk} < 3, Shadow CI not required.`);
+            }
+
+      # ═══════════════════════════════════════════
+      # 8. Comment on PR if blocked (explain reason)
+      # ═══════════════════════════════════════════
+      - name: Comment on PR if blocked
+        if: failure() && steps.detect.outputs.upgrade == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const score = "${{ steps.gates.outputs.this_score }}" || "N/A";
+            const prevScore = "${{ steps.gates.outputs.prev_score }}" || "N/A";
+            const thisTop = "${{ steps.gates.outputs.this_top }}" || "N/A";
+            const prevTop = "${{ steps.gates.outputs.prev_top }}" || "N/A";
+            const min = process.env.HEALTH_MIN;
+
+            const body = [
+              "🚫 **Upgrade Guard: PR Blocked (Dual-Valve Check Failed)**",
+              "",
+              "| Check | Value | Required |",
+              "|-------|-------|----------|",
+              `| Health Score (7d) | **${score}** | ≥ ${min} |`,
+              `| Prev week score | ${prevScore} | — |`,
+              `| This week top failures | \`${thisTop}\` | — |`,
+              `| Prev week top failures | \`${prevTop}\` | — |`,
+              "",
+              "**What to do:**",
+              "- Stabilize Gate 0 (reduce failures, improve MTTR, fix auto-heal)",
+              "- Wait for Health Score to reach ≥ 85 with no new failure class outbreaks",
+              "- Re-push or re-open PR to re-trigger this check",
+              "",
+              "Evidence: see `gate0-guard-reports` artifact for full computed reports.",
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+        env:
+          HEALTH_MIN: ${{ env.HEALTH_MIN }}

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "default_group_mention": "",
+  "owners": {
+    "CTO": "",
+    "CDO": "",
+    "Frontend": ""
+  }
+}
