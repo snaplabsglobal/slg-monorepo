@@ -86,14 +86,14 @@ function header(msg: string) { return `\n${colors.bold}${colors.cyan}═══ $
 
 async function fetchRuntime(baseUrl: string): Promise<RuntimeFingerprint | null> {
   try {
-    const res = await fetch(`${baseUrl}/api/__runtime`, { cache: 'no-store' })
+    const res = await fetch(`${baseUrl}/api/runtime`, { cache: 'no-store' })
     if (!res.ok) {
       console.error(fail(`Runtime endpoint returned ${res.status}`))
       return null
     }
     return await res.json()
   } catch (err) {
-    console.error(fail(`Cannot reach ${baseUrl}/api/__runtime: ${(err as Error).message}`))
+    console.error(fail(`Cannot reach ${baseUrl}/api/runtime: ${(err as Error).message}`))
     return null
   }
 }
@@ -324,7 +324,7 @@ async function runDoctor(target: Target) {
     console.log('Possible causes:')
     console.log('  - Server not running (for local)')
     console.log('  - DNS not configured (for dev)')
-    console.log('  - /api/__runtime endpoint missing')
+    console.log('  - /api/runtime endpoint missing')
     process.exit(1)
   }
 
