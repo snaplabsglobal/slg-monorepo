@@ -115,6 +115,11 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Match all paths except:
+     * - Static files (_next/static, _next/image, favicon, images)
+     * - SEOS monitoring endpoints (proof-pack, runtime, gatef, esi, seos)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|api/proof-pack|api/runtime|api/gatef|api/esi|api/seos|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
