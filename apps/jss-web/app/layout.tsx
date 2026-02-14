@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { InstallBanner } from "@/components/pwa/InstallBanner";
+import { RuntimeBadge } from "@/components/RuntimeBadge";
 
 export const metadata: Metadata = {
   title: "JobsiteSnap - Never Lose a Job Photo",
@@ -41,6 +42,8 @@ export default function RootLayout({
       <body>
         <InstallBanner />
         {children}
+        {/* CTO Requirement A: Runtime Truth Badge - visible on all pages */}
+        <RuntimeBadge />
         <script
           dangerouslySetInnerHTML={{
             __html: `
