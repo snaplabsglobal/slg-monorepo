@@ -1,0 +1,23 @@
+{
+  "repo": "jss-web",
+  "baseline_version": "1.0.0",
+  "git_commit": "53ecfb02389f391591062be3bb7f0c789063b668",
+  "baseline_hash": "sha256:779cbf4bd04ec082b694f605328967dbf7d0de37fcd86d54657cc15e76d13528",
+  "signed_by": {
+    "CEO": {
+      "name": "Patrick Jiang",
+      "signed_at": "2026-02-12T00:00:00Z"
+    },
+    "CTO": {
+      "name": "Claude (AI CTO Agent)",
+      "signed_at": "2026-02-12T00:00:00Z"
+    }
+  },
+  "note": "From this moment, this structure is the legal starting point. All evolution must be proven.",
+  "governance_doc_version": "SLG_SnapOps_Operational_Launch_v1.1",
+  "trial_period": {
+    "start": "2026-02-12",
+    "end": "2026-03-14",
+    "days": 30
+  }
+}

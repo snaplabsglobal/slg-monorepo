@@ -1,0 +1,360 @@
+{
+  "version": "1.0.0",
+  "system_name": "SEOS / SnapOps",
+  "mode": "controlled_autonomy",
+
+  "system_identity": {
+    "type": "AI_Governed_Autonomous_System",
+    "governance_model": "constitutional",
+    "evolution_model": "windowed",
+    "risk_model": "budgeted",
+    "sovereignty_model": "human_defined_invariants"
+  },
+
+  "governance_signature": {
+    "signed_by": null,
+    "signed_at": null,
+    "signature_hash": null,
+    "note": "v1 uses git commit hash as signature. Formal signing in v2."
+  },
+
+  "constitutional_files": [
+    "scripts/gate0/policy.mjs",
+    "scripts/gate0/risk.mjs",
+    "scripts/gate0/whitelist.mjs",
+    "scripts/gate0/suspend.mjs",
+    "policy.json"
+  ],
+
+  "actors": {
+    "AI": {
+      "can": [
+        "propose_patch",
+        "audit_patch",
+        "simulate_patch",
+        "open_pr",
+        "propose_evolution_window",
+        "propose_gate_upgrade"
+      ],
+      "cannot": [
+        "modify_constitutional_files",
+        "modify_policy",
+        "upgrade_gate_level",
+        "reset_risk_ledger",
+        "unlock_suspend",
+        "activate_evolution_window"
+      ]
+    },
+    "CTO": {
+      "can": [
+        "override_suspend",
+        "force_downgrade_gate",
+        "approve_high_risk_patch",
+        "approve_evolution_window",
+        "approve_gate_upgrade"
+      ],
+      "cannot": [
+        "modify_governance_invariants",
+        "auto_upgrade_gate_without_policy_rules"
+      ]
+    },
+    "CEO": {
+      "can": [
+        "modify_policy",
+        "modify_governance_invariants",
+        "change_risk_model",
+        "freeze_system"
+      ]
+    }
+  },
+
+  "autonomy_levels": {
+    "A": {
+      "name": "Safe Mode",
+      "max_risk_per_patch": 30,
+      "risk_budget_limit": 50,
+      "allowed_error_classes": [
+        "LOCKFILE_OUT_OF_SYNC"
+      ],
+      "double_audit_required": false,
+      "requires_observation_window": false
+    },
+    "B": {
+      "name": "Structured Mode",
+      "max_risk_per_patch": 60,
+      "risk_budget_limit": 100,
+      "allowed_error_classes": [
+        "LOCKFILE_OUT_OF_SYNC",
+        "MODULE_NOT_FOUND_WORKSPACE_PKG",
+        "NO_EXPORTED_MEMBER"
+      ],
+      "double_audit_required": true,
+      "requires_observation_window": false
+    },
+    "C": {
+      "name": "Advanced Mode",
+      "max_risk_per_patch": 80,
+      "risk_budget_limit": 150,
+      "allowed_error_classes": [
+        "LOCKFILE_OUT_OF_SYNC",
+        "MODULE_NOT_FOUND_WORKSPACE_PKG",
+        "NO_EXPORTED_MEMBER"
+      ],
+      "double_audit_required": true,
+      "requires_observation_window": true
+    }
+  },
+
+  "error_class_permissions": {
+    "LOCKFILE_OUT_OF_SYNC":           { "allowed_gates": ["A", "B", "C"] },
+    "MODULE_NOT_FOUND_WORKSPACE_PKG": { "allowed_gates": ["B", "C"] },
+    "NO_EXPORTED_MEMBER":             { "allowed_gates": ["B", "C"] },
+    "SHARED_LIB_CHANGE":             { "allowed_gates": ["C"], "requires_manual_cto": true }
+  },
+
+  "risk_ledger": {
+    "window": "rolling_7_days",
+    "auto_pause_threshold": 0.8,
+    "reset_on_downgrade": true,
+    "failure_penalty_multiplier": 1.5,
+    "failure_penalty_cap_ratio": 0.3,
+    "recovery_rules": {
+      "consecutive_low_risk_success": {
+        "threshold": 5,
+        "max_risk_for_low": 15,
+        "recovery_amount": 10
+      },
+      "consecutive_any_success": {
+        "threshold": 10,
+        "recovery_amount": 15
+      },
+      "clean_week": {
+        "days_without_fail": 7,
+        "recovery_amount": 20
+      },
+      "max_recovery_per_window": 1,
+      "constitutional_violation_blocks_recovery": true
+    }
+  },
+
+  "upgrade_rules": {
+    "from_A_to_B": {
+      "min_ehi": 75,
+      "min_success_streak": 5,
+      "max_reject_rate": 0.2,
+      "max_budget_usage_ratio": 0.5,
+      "observation_hours": 12,
+      "no_suspend_in_last_7_days": true
+    },
+    "from_B_to_C": {
+      "min_ehi": 85,
+      "min_success_streak": 10,
+      "max_reject_rate": 0.15,
+      "max_budget_usage_ratio": 0.4,
+      "observation_hours": 24,
+      "no_suspend_in_last_7_days": true
+    }
+  },
+
+  "downgrade_rules": {
+    "consecutive_simulate_fail": 2,
+    "suspend_trigger": true,
+    "ehi_below": 60,
+    "downgrade_immediate": true
+  },
+
+  "suspend_policy": {
+    "cooldown_hours": 12,
+    "manual_unlock_required": true,
+    "override_log_required": true,
+    "emergency_override": {
+      "allowed_actors": ["CTO"],
+      "max_per_month": 2,
+      "requires_post_mortem_within_24h": true,
+      "auto_escalate_to_ceo": true
+    }
+  },
+
+  "forbidden_paths_global": [
+    "infra/**",
+    ".github/**",
+    "database/migrations/**",
+    "packages/**",
+    "policy.json"
+  ],
+
+  "evolution_window": {
+    "enabled": false,
+    "auto_proposal_allowed": true,
+    "requires_cto_approval": true,
+    "max_duration_hours": 48,
+    "allowed_paths": ["packages/**"],
+    "requires_invariant_test_suite": true,
+    "requires_multi_model_audit": true,
+    "requires_versioning": true,
+    "auto_close_on_violation": true,
+    "proposal_conditions": {
+      "min_gate": "C",
+      "min_ehi": 88,
+      "min_stable_days": 7,
+      "max_reject_rate": 0.1,
+      "max_budget_usage_ratio": 0.4
+    }
+  },
+
+  "governance_invariants": {
+    "priority_order": [
+      "data_integrity",
+      "security_sovereignty",
+      "engineering_stability"
+    ],
+
+    "violation_severity_levels": {
+      "warning": {
+        "description": "Structural change but semantically compatible (e.g. new field added without baseline update)",
+        "action": "log_and_alert",
+        "blocks_commit": false
+      },
+      "major": {
+        "description": "Structural change that may be incompatible but is reversible (e.g. migration missing down)",
+        "action": "immediate_downgrade_cto_unlock",
+        "blocks_commit": true
+      },
+      "constitutional": {
+        "description": "Irreversible destruction of data semantics (e.g. field deletion, backward state transition)",
+        "action": "downgrade_to_A_suspend_ceo_unlock",
+        "blocks_commit": true
+      }
+    },
+
+    "data_integrity": {
+      "enforced": true,
+      "rules": [
+        "event_immutability",
+        "state_machine_monotonicity",
+        "migration_reversibility",
+        "no_silent_data_loss",
+        "api_surface_change_requires_versioning"
+      ]
+    },
+    "security_sovereignty": {
+      "enforced": true,
+      "rules": [
+        "constitutional_files_immutable",
+        "ai_cannot_self_upgrade_permissions",
+        "secrets_not_accessible",
+        "audit_trail_append_only",
+        "override_requires_log"
+      ]
+    },
+    "engineering_stability": {
+      "enforced": true,
+      "rules": [
+        "build_reproducibility",
+        "ci_duration_budget"
+      ]
+    }
+  },
+
+  "invariant_test_suite": {
+    "enabled": true,
+    "tier0": {
+      "rules": [
+        "event_immutability",
+        "state_machine_monotonicity",
+        "migration_reversibility"
+      ],
+      "severity_mapping": {
+        "field_added_without_baseline_update": "warning",
+        "migration_missing_down": "major",
+        "state_added_without_handler": "major",
+        "field_deleted": "constitutional",
+        "field_type_changed": "constitutional",
+        "state_backward_transition": "constitutional",
+        "silent_data_loss": "constitutional"
+      }
+    }
+  },
+
+  "snapops_identity": {
+    "current_role": "slg_internal_infrastructure",
+    "target_products": ["jss-web"],
+    "external_storytelling": false,
+    "product_readiness_conditions": {
+      "min_pr_records": 100,
+      "min_internal_months": 6,
+      "requires_evolution_success": true,
+      "requires_violation_blocked": true
+    }
+  },
+
+  "governance_approval_model": {
+    "level_0_normal": {
+      "required_approver": null,
+      "gdr_required": false
+    },
+    "level_1_append_only": {
+      "required_approver": null,
+      "gdr_required": true,
+      "gdr_mode": "auto_generated"
+    },
+    "level_2_structural_change": {
+      "required_approver": "CTO",
+      "ceo_involved": false,
+      "gdr_required": true,
+      "gdr_mode": "manual_required"
+    },
+    "level_3_constitutional_change": {
+      "required_approver": ["CEO", "CTO"],
+      "auto_suspend": true,
+      "require_manual_unlock": true,
+      "gdr_required": true,
+      "gdr_mode": "manual_required"
+    }
+  },
+
+  "baseline_signing": {
+    "mode": "dual_signature",
+    "signers": ["CEO", "CTO"],
+    "baseline_directory": "governance/baseline/",
+    "signature_file": "governance/baseline.signature.json",
+    "hash_algorithm": "sha256"
+  },
+
+  "trial_config": {
+    "target_repo": "jss-web",
+    "start_date": "2026-02-12",
+    "end_date": "2026-03-14",
+    "duration_days": 30,
+    "enabled_modules": [
+      "gate_a",
+      "tier0_invariants",
+      "risk_ledger",
+      "violation_severity",
+      "constitutional_file_protection"
+    ],
+    "disabled_modules": [
+      "gate_b",
+      "gate_c",
+      "evolution_window",
+      "double_audit",
+      "pr_bot",
+      "risk_recovery"
+    ],
+    "severity_schedule": {
+      "week_1_2": {
+        "constitutional_only_for": ["field_deleted", "state_deleted", "migration_irreversible"],
+        "other_tier0_as": "warning"
+      },
+      "week_3_4_upgrade_condition": "false_positive_rate <= 1_per_week",
+      "week_3_4_if_met": "tier0_all_constitutional",
+      "week_3_4_if_not_met": "maintain_week_1_2_strategy"
+    }
+  },
+
+  "source_of_truth": {
+    "event_schema": ".gate0-telemetry/events.jsonl",
+    "state_machine": "apps/jss-web/app/lib/snap-evidence/types.ts",
+    "migrations": "supabase/migrations/"
+  }
+}

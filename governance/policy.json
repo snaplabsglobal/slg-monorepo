@@ -1,0 +1,228 @@
+{
+  "version": "1.1.0",
+  "last_updated": "2026-02-13",
+  "source_incidents": ["AUTH-LOCK-NGROK-001", "AUTH_NGROK_PUBLIC_002"],
+
+  "auth_governance_rules": {
+    "rule_1_no_lock_on_init": {
+      "id": "AUTH-RULE-001",
+      "description": "Auth 初始化阶段禁止使用 navigatorLock",
+      "rationale": "初始化阶段的 lock 在慢网络/隧道/多实例下极易 abort，导致 Auth 完全失效。影响面 = 100% 用户。",
+      "enforced": true,
+      "enforcement_method": "code_review + lint_rule",
+      "source_incident": "AUTH-LOCK-NGROK-001",
+      "created_date": "2026-02-13"
+    },
+    "rule_2_lock_scope": {
+      "id": "AUTH-RULE-002",
+      "description": "Lock 只允许用于 refresh token 并发保护",
+      "allowed_scopes": ["token_refresh"],
+      "forbidden_scopes": ["client_init", "session_get", "login", "logout"],
+      "enforced": true,
+      "enforcement_method": "code_review",
+      "source_incident": "AUTH-LOCK-NGROK-001",
+      "created_date": "2026-02-13"
+    },
+    "rule_3_auth_fix_requires_script": {
+      "id": "AUTH-RULE-003",
+      "description": "Auth 相关修复 PR 必须包含可重复自动验证脚本",
+      "enforced": true,
+      "blocks_merge_if_missing": true,
+      "exception": {
+        "condition": "P0 紧急修复",
+        "action": "允许先合并，但必须在 24h 内补齐脚本，否则 revert"
+      },
+      "source_incident": "AUTH-LOCK-NGROK-001",
+      "created_date": "2026-02-13"
+    },
+    "rule_4_real_browser_validation": {
+      "id": "AUTH-RULE-004",
+      "description": "Auth/Cookie/Proxy/Navigator API 变更必须在真实浏览器环境验证",
+      "rationale": "E2E 环境无 HMR / 无 SW / 无多实例竞争，不能代表真实环境。Playwright 通过是必要条件，不是充分条件。",
+      "triggers": [
+        "packages/snap-auth/**",
+        "**/middleware.ts",
+        "**/supabase-proxy/**",
+        "**/cookie*"
+      ],
+      "enforced": true,
+      "enforcement_method": "manual_checklist",
+      "source_incident": "AUTH-LOCK-NGROK-001",
+      "created_date": "2026-02-13"
+    }
+  },
+
+  "environment_governance": {
+    "rule_5_explicit_env": {
+      "id": "ENV-RULE-005",
+      "description": "环境必须通过 NEXT_PUBLIC_RUNTIME_ENV 显式声明，禁止用 hostname 推断",
+      "rationale": "用 hostname 猜环境导致 ngrok 被误判为 prod-like，走了不该走的 lock/SW 分支",
+      "required_env_vars": [
+        "NEXT_PUBLIC_RUNTIME_ENV",
+        "NEXT_PUBLIC_AUTH_MODE",
+        "NEXT_PUBLIC_LOCK_MODE"
+      ],
+      "default_if_missing": {
+        "NEXT_PUBLIC_RUNTIME_ENV": "local",
+        "NEXT_PUBLIC_AUTH_MODE": "direct",
+        "NEXT_PUBLIC_LOCK_MODE": "off"
+      },
+      "enforced": true,
+      "source_incident": "AUTH_NGROK_PUBLIC_002",
+      "created_date": "2026-02-13"
+    },
+    "rule_6_ngrok_is_dev_like": {
+      "id": "ENV-RULE-006",
+      "description": "ngrok 环境享有 dev-like 安全降级权限",
+      "rationale": "ngrok 是隧道环境，延迟高、lock 容易超时、SW 注册不稳定。不应走 prod 路径。",
+      "when_runtime_env": "ngrok",
+      "lock_mode": "off",
+      "sw_enabled": false,
+      "auth_mode": "proxy",
+      "enforced": true,
+      "source_incident": "AUTH_NGROK_PUBLIC_002",
+      "created_date": "2026-02-13"
+    },
+    "rule_7_console_error_gate": {
+      "id": "ENV-RULE-007",
+      "description": "E2E 必须断言 console 无 AbortError / InvalidStateError",
+      "rationale": "前两次事故中 E2E 通过但 console 有错误，导致'看起来过了但实际有问题'",
+      "blocked_console_errors": ["AbortError", "InvalidStateError", "unhandled rejection"],
+      "requires_in_proof_pack": "console-errors-summary.json",
+      "whitelist": [],
+      "enforced": true,
+      "source_incident": "AUTH_NGROK_PUBLIC_002",
+      "created_date": "2026-02-13"
+    },
+    "rule_8_sw_api_guard": {
+      "id": "ENV-RULE-008",
+      "description": "SW API 调用必须有强 guard，dev/ngrok 禁止触碰",
+      "rationale": "'声称禁用 SW' 但实际仍在调用 getRegistrations() 导致 InvalidStateError",
+      "guard_conditions": [
+        "RUNTIME_ENV === 'prod'",
+        "typeof navigator !== 'undefined'",
+        "navigator.serviceWorker exists",
+        "try-catch 包裹所有 SW 调用"
+      ],
+      "forbidden_in_non_prod": [
+        "navigator.serviceWorker.register",
+        "navigator.serviceWorker.getRegistrations",
+        "navigator.serviceWorker.ready"
+      ],
+      "enforced": true,
+      "source_incident": "AUTH_NGROK_PUBLIC_002",
+      "created_date": "2026-02-13"
+    },
+    "rule_9_login_must_land_expected_page": {
+      "id": "AUTH-RULE-009",
+      "description": "Login must land on expected page and SSR must return 200. After successful login, expected_path -> 307 -> /login is forbidden.",
+      "category": "AUTH_SYSTEM / BUSINESS_ACCEPTANCE",
+      "rationale": "CTO 测试 token=200 passed 但 CEO 发现 ngrok 无法登录 - SSR session 不同步导致 307 redirect loop",
+      "enforced": true,
+      "gate": "gate0-b",
+      "config": {
+        "expected_path_default": "/jobs"
+      },
+      "assertions": [
+        "after_login_final_path_is_expected_path",
+        "expected_path_first_response_status_is_200",
+        "no_expected_path_307_redirect_to_login_within_10s",
+        "reload_keeps_user_on_expected_path"
+      ],
+      "proof_pack_required": [
+        "har",
+        "screenshots/after-login-page-visible.png",
+        "screenshots/after-reload-still-on-page.png",
+        "cookies-after-login.json",
+        "cookies-after-logout.json",
+        "console-errors-summary.json"
+      ],
+      "blocked_redirect_patterns": [
+        {
+          "pattern": "expected_path -> 307 -> /login",
+          "window_seconds": 10,
+          "severity": "P0"
+        }
+      ],
+      "source_incident": "AUTH_NGROK_PUBLIC_002",
+      "created_date": "2026-02-13"
+    }
+  },
+
+  "environment_matrix": {
+    "local": {
+      "runtime_env": "local",
+      "auth_mode": "direct",
+      "lock_mode": "off",
+      "sw": "off"
+    },
+    "ngrok": {
+      "runtime_env": "ngrok",
+      "auth_mode": "proxy",
+      "lock_mode": "off",
+      "sw": "off"
+    },
+    "prod": {
+      "runtime_env": "prod",
+      "auth_mode": "direct",
+      "lock_mode": "full",
+      "sw": "on"
+    }
+  },
+
+  "gate_requirements": {
+    "gate_0b_auth_proof_pack": {
+      "description": "Auth 修复必须生成完整 Proof Pack",
+      "required_artifacts": [
+        "auth-target.json",
+        "trace-webkit.zip",
+        "screenshots/01-login.png",
+        "screenshots/02-after-login.png",
+        "screenshots/03-after-refresh.png",
+        "screenshots/04-after-logout.png",
+        "cookies-after-login.json",
+        "cookies-after-logout.json",
+        "auth-token-capture.json",
+        "console-errors-summary.json",
+        "summary.txt"
+      ],
+      "blocks_build": true
+    }
+  },
+
+  "rule_index": {
+    "brick_1": ["AUTH-RULE-001", "AUTH-RULE-002", "AUTH-RULE-003", "AUTH-RULE-004"],
+    "brick_2": ["ENV-RULE-005", "ENV-RULE-006", "ENV-RULE-007", "ENV-RULE-008", "AUTH-RULE-009"],
+    "brick_2_governance": ["UI-RULE-010", "GATE-RULE-011", "CEO-RULE-012"]
+  },
+
+  "governance_rules": {
+    "rule_10_testid_required": {
+      "id": "UI-RULE-010",
+      "description": "所有关键业务动作必须有 data-testid，缺失则 PR fail",
+      "rationale": "E2E 定位脆弱导致'看起来过了但实际有问题'",
+      "enforced": true,
+      "enforcement_method": "scripts/validate-testid.ts",
+      "source": "L4 UI Constitution",
+      "created_date": "2026-02-13"
+    },
+    "rule_11_p0_required_contracts": {
+      "id": "GATE-RULE-011",
+      "description": "P0 Required Contracts 缺席 = BUSINESS_FAIL，CI fail",
+      "rationale": "防止'少测也算通过'",
+      "enforced": true,
+      "enforcement_method": "scripts/proofpack/validate-proofpack.ts",
+      "source": "L5 Proof Pack",
+      "created_date": "2026-02-13"
+    },
+    "rule_12_ceo_business_pass": {
+      "id": "CEO-RULE-012",
+      "description": "BUSINESS_PASS 为 CEO 唯一验收判据，不接受口头确认",
+      "rationale": "验收标准不对齐导致 CTO 测试 passed 但 CEO 无法使用",
+      "enforced": true,
+      "enforcement_method": "/ceo/proof dashboard",
+      "source": "L6 CEO Dashboard",
+      "created_date": "2026-02-13"
+    }
+  }
+}

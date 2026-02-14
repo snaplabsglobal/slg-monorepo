@@ -1,0 +1,47 @@
+{
+  "id": "BIZ-AUTH-LOGIN-LAND",
+  "name": "Login must land on expected page and SSR must return 200",
+  "category": "AUTH_SYSTEM / BUSINESS_ACCEPTANCE",
+  "severity": "P0",
+  "enforced": true,
+  "gate": "gate0-b",
+  "scope": {
+    "runtime_env": ["local", "ngrok"],
+    "roles": ["any"],
+    "browsers": ["chromium", "webkit"]
+  },
+  "config": {
+    "expected_path_default": "/jobs"
+  },
+  "given": ["user_on_/login", "valid_credentials_available"],
+  "when": ["submit_login_form"],
+  "then": [
+    "final_url_path_is_expected_path",
+    "expected_path_first_response_status_is_200",
+    "expected_page_key_element_visible",
+    "reload_keeps_user_on_expected_path"
+  ],
+  "invariants": {
+    "forbidden": [
+      "expected_path -> 307 -> /login within 10s",
+      "auth_success_but_no_server_session_cookie"
+    ],
+    "must_hold": ["console_error_blocklist_is_empty"]
+  },
+  "proof_pack_required": [
+    "har",
+    "screenshots/after-login.png",
+    "screenshots/after-reload.png",
+    "cookies-after-login.json",
+    "cookies-after-logout.json",
+    "console-errors-summary.json"
+  ],
+  "observability": {
+    "console_error_blocklist": ["AbortError", "InvalidStateError", "Unhandled"]
+  },
+  "source": {
+    "source_incident": "AUTH_NGROK_PUBLIC_002",
+    "owner": "CTO",
+    "reviewer": "CEO"
+  }
+}

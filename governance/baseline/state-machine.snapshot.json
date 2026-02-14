@@ -1,0 +1,139 @@
+{
+  "version": "1.0.0",
+  "extracted_at": "2026-02-13T00:22:08.428Z",
+  "source": "/home/pxjiang/slg-monorepo/apps/jss-web/app/lib/snap-evidence/types.ts",
+  "state_machines": {
+    "CaptureState": [
+      "idle",
+      "capturing",
+      "local_written",
+      "failed",
+      "not_queued",
+      "queued",
+      "uploading",
+      "uploaded",
+      "error_retryable",
+      "unassigned",
+      "suggested_by_smart_trace",
+      "user_confirmed",
+      "manually_assigned",
+      "pending",
+      "uploading",
+      "uploaded",
+      "failed",
+      "before",
+      "during",
+      "after",
+      "preview",
+      "original",
+      "wm",
+      "low",
+      "medium",
+      "high",
+      "low",
+      "medium",
+      "during",
+      "preview",
+      "pending",
+      "uploading",
+      "uploading",
+      "uploaded",
+      "failed",
+      "failed",
+      "pending",
+      "uploaded",
+      "idle",
+      "capturing",
+      "capturing",
+      "local_written",
+      "failed",
+      "local_written",
+      "failed",
+      "not_queued",
+      "queued",
+      "queued",
+      "uploading",
+      "uploading",
+      "uploaded",
+      "error_retryable",
+      "uploaded",
+      "error_retryable",
+      "queued",
+      "unassigned",
+      "suggested_by_smart_trace",
+      "manually_assigned",
+      "suggested_by_smart_trace",
+      "user_confirmed",
+      "unassigned",
+      "manually_assigned",
+      "user_confirmed",
+      "manually_assigned",
+      "t suggest\n\n  // Maximum candidates to return\n  maxCandidates: 3,\n\n  // Trigger conditions\n  triggerOnline: true,        // Only trigger when online\n  requireCoords: true,        // Require temp_coords to exist\n}\n\n/**\n * Confidence thresholds for Smart Trace\n */\nexport const SMART_TRACE_CONFIDENCE = {\n  // Distance thresholds\n  mediumMaxDistance: 50,      // < 50m = medium confidence\n  lowMaxDistance: 100,        // < 100m = low confidence\n  // Beyond 100m = no suggestion\n}\n\n/**\n * Upload configuration\n */\nexport const UPLOAD_CONFIG = {\n  maxConcurrent: 2,             // Mobile: max 2 concurrent uploads\n  maxRetries: 3,                // Single photo max retries\n  retryDelays: [1000, 5000, 30000], // 1s, 5s, 30s\n  timeout: 60000                // Single upload timeout: 60s\n}\n\n/**\n * Storage TTL configuration (Phase 1.5)\n * Original images are kept locally for 7 days after upload\n */\nexport const STORAGE_TTL_CONFIG = {\n  originalRetentionDays: 7,     // Days to keep original after upload\n  cleanupIntervalMs: 24 * 60 * 60 * 1000,  // Run cleanup daily\n}\n\n/**\n * Watermark configuration\n */\nexport interface WatermarkConfig {\n  version: string               // ",
+      "\n  fields: string[]              // [",
+      ", ",
+      ", ",
+      "]\n  // Phase 2+\n  include_weather?: boolean\n  geo_precision?: ",
+      " | ",
+      "\n}\n\n/**\n * Default watermark config for Phase 1\n */\nexport const DEFAULT_WATERMARK_CONFIG: WatermarkConfig = {\n  version: ",
+      ",\n  fields: [",
+      ", ",
+      ", "
+    ]
+  },
+  "transitions": {
+    "VALID_TRANSITIONS": {
+      "pending": [
+        "uploading"
+      ],
+      "uploading": [
+        "uploaded",
+        "failed"
+      ],
+      "failed": [
+        "pending"
+      ],
+      "uploaded": []
+    },
+    "CAPTURE_TRANSITIONS": {
+      "idle": [
+        "capturing"
+      ],
+      "capturing": [
+        "local_written",
+        "failed"
+      ],
+      "local_written": [],
+      "failed": []
+    },
+    "UPLOAD_TRANSITIONS": {
+      "not_queued": [
+        "queued"
+      ],
+      "queued": [
+        "uploading"
+      ],
+      "uploading": [
+        "uploaded",
+        "error_retryable"
+      ],
+      "uploaded": [],
+      "error_retryable": [
+        "queued"
+      ]
+    },
+    "ASSIGNMENT_TRANSITIONS": {
+      "unassigned": [
+        "suggested_by_smart_trace",
+        "manually_assigned"
+      ],
+      "suggested_by_smart_trace": [
+        "user_confirmed",
+        "unassigned",
+        "manually_assigned"
+      ],
+      "user_confirmed": [],
+      "manually_assigned": []
+    }
+  },
+  "raw_hash": "3fdcaa49a812b302"
+}

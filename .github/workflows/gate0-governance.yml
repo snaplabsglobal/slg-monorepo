@@ -1,0 +1,226 @@
+# SnapOps Governance v1 — Gate A Enforcement
+# Document: SLG_Governance_Constitution_v1.0-final
+#
+# 30-day observation period: 2026-02-12 → 2026-03-14
+# Scope: jss-web
+# Restrictions: no_extensions, gate_a_only, tier0_invariants_only
+
+name: Gate0 Governance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/jss-web/**'
+      - 'packages/**'
+      - 'policy.json'
+      - 'scripts/gate0/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  governance-check:
+    runs-on: ubuntu-latest
+    name: SnapOps Gate A Check
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ═══════════════════════════════════════════
+      # 1. Policy Validation
+      # ═══════════════════════════════════════════
+      - name: Validate policy.json
+        id: policy
+        run: |
+          echo "Validating policy.json..."
+          node scripts/gate0/policy.mjs --validate
+
+      # ═══════════════════════════════════════════
+      # 2. Suspend Check
+      # ═══════════════════════════════════════════
+      - name: Check suspend status
+        id: suspend
+        run: |
+          echo "Checking suspend status..."
+          RESULT=$(node scripts/gate0/suspend.mjs --status)
+          echo "$RESULT"
+
+          SUSPENDED=$(echo "$RESULT" | grep -o '"suspended": true' || true)
+          if [ -n "$SUSPENDED" ]; then
+            echo "❌ System is SUSPENDED. Self-heal disabled."
+            echo "suspended=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "suspended=false" >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════
+      # 3. Risk Assessment (changed files)
+      # ═══════════════════════════════════════════
+      - name: Get changed files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+          echo "Changed files: $FILES"
+
+      - name: Risk assessment
+        id: risk
+        run: |
+          FILES="${{ steps.changed.outputs.files }}"
+          if [ -z "$FILES" ]; then
+            echo "No files changed"
+            exit 0
+          fi
+
+          echo "Assessing risk for: $FILES"
+          RESULT=$(node scripts/gate0/risk.mjs --check-files $FILES)
+          echo "$RESULT"
+
+          RISK=$(echo "$RESULT" | grep -o '"risk": [0-9]*' | grep -o '[0-9]*')
+          ALLOWED=$(echo "$RESULT" | grep -o '"allowed": true' || true)
+
+          echo "risk=$RISK" >> $GITHUB_OUTPUT
+
+          if [ -z "$ALLOWED" ]; then
+            echo "❌ Risk too high for Gate A (max: 30)"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════
+      # 4. Invariant Check (Tier-0)
+      # ═══════════════════════════════════════════
+      - name: Tier-0 Invariant Check
+        id: invariant
+        run: |
+          echo "Running Tier-0 invariant checks..."
+          RESULT=$(node scripts/gate0/invariant_check.mjs --event-schema 2>&1) || true
+          echo "$RESULT"
+
+          # Check for constitutional violations
+          if echo "$RESULT" | grep -q '"severity": "constitutional"'; then
+            echo "❌ CONSTITUTIONAL VIOLATION detected!"
+            exit 1
+          fi
+
+          # Major violations block but don't fail CI (warning)
+          if echo "$RESULT" | grep -q '"severity": "major"'; then
+            echo "⚠️ Major violation detected - requires CTO review"
+          fi
+
+      # ═══════════════════════════════════════════
+      # 5. Classify Governance Level + Auto GDR
+      # Document: SLG_SnapOps_CTO_Implementation_Guide_v1 §七
+      # ═══════════════════════════════════════════
+      - name: Classify Governance Level
+        id: gdr
+        run: |
+          echo "Classifying governance level..."
+          node scripts/gate0/invariants/classify-change-level.mjs || true
+          if [ -f out/gdr.auto.json ]; then
+            cat out/gdr.auto.json
+            LEVEL=$(cat out/gdr.auto.json | grep -o '"level": [0-9]*' | grep -o '[0-9]*')
+            echo "level=$LEVEL" >> $GITHUB_OUTPUT
+          else
+            echo "level=0" >> $GITHUB_OUTPUT
+          fi
+        env:
+          SNAPOPS_BASE_REF: origin/${{ github.base_ref || 'main' }}
+          SNAPOPS_HEAD_REF: ${{ github.sha }}
+
+      # ═══════════════════════════════════════════
+      # 6. Require L2 Approval Rationale (if Level 2)
+      # ═══════════════════════════════════════════
+      - name: Require L2 Approval
+        if: steps.gdr.outputs.level == '2'
+        run: |
+          echo "Level 2 change detected, checking for approval rationale..."
+          node scripts/gate0/invariants/require-l2-approval.mjs
+
+      # ═══════════════════════════════════════════
+      # 7. Gate Status Summary
+      # ═══════════════════════════════════════════
+      - name: Gate status summary
+        if: always()
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "SnapOps Governance v1 — Gate A Status"
+          echo "═══════════════════════════════════════════"
+          node scripts/gate0/risk.mjs --status
+          echo ""
+          echo "GDR Level: ${{ steps.gdr.outputs.level || 'N/A' }}"
+          echo "Observation Period: 2026-02-12 → 2026-03-14 (30 days)"
+          echo "Scope: jss-web"
+          echo "Restrictions: gate_a_only, tier0_invariants_only, no_extensions"
+
+      # ═══════════════════════════════════════════
+      # 8. Upload Governance Reports
+      # ═══════════════════════════════════════════
+      - name: Upload Governance Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-reports
+          path: |
+            out/invariant-report.json
+            out/invariant-report.md
+            out/gdr.auto.json
+            out/gdr.auto.md
+
+      # ═══════════════════════════════════════════
+      # 9. Comment on PR (if blocked)
+      # ═══════════════════════════════════════════
+      - name: Comment on blocked PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const risk = "${{ steps.risk.outputs.risk }}" || "N/A";
+            const suspended = "${{ steps.suspend.outputs.suspended }}";
+
+            let reason = "Unknown";
+            if (suspended === "true") {
+              reason = "System is SUSPENDED (requires CTO/CEO unlock)";
+            } else if (parseInt(risk) > 30) {
+              reason = `Risk score ${risk} exceeds Gate A max (30)`;
+            }
+
+            const body = [
+              "🚫 **SnapOps Governance: PR Blocked**",
+              "",
+              "| Check | Value |",
+              "|-------|-------|",
+              `| Gate | **A** (Safe Mode) |`,
+              `| Risk Score | **${risk}** |`,
+              `| Max Allowed | 30 |`,
+              `| Suspended | ${suspended} |`,
+              "",
+              `**Reason:** ${reason}`,
+              "",
+              "**Observation Period:** 2026-02-12 → 2026-03-14 (30 days)",
+              "",
+              "---",
+              "*SnapOps Governance v1 — SLG_Governance_Constitution_v1.0-final*"
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
