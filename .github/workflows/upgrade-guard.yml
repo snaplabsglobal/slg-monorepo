@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   guard:
+    name: upgrade Guard
     runs-on: ubuntu-latest
     env:
       HEALTH_MIN: "85"
