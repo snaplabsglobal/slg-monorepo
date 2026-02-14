@@ -29,7 +29,8 @@ function getPublicEnvFingerprint(): string {
  */
 function getFeatureFlagsFingerprint(): string {
   const flags = {
-    ENABLE_PHOTO_DELETE: process.env.NEXT_PUBLIC_ENABLE_PHOTO_DELETE || 'false',
+    // photo_delete: API exists and is always enabled - flag reflects reality
+    ENABLE_PHOTO_DELETE: process.env.NEXT_PUBLIC_ENABLE_PHOTO_DELETE || 'true',
     ENABLE_IMPORT: process.env.NEXT_PUBLIC_ENABLE_IMPORT || 'true',
     ENABLE_SMART_TRACE: process.env.NEXT_PUBLIC_ENABLE_SMART_TRACE || 'true',
   }
@@ -65,7 +66,8 @@ export async function GET() {
     public_env_fingerprint: getPublicEnvFingerprint(),
     feature_flags_fingerprint: getFeatureFlagsFingerprint(),
     feature_flags: {
-      photo_delete: process.env.NEXT_PUBLIC_ENABLE_PHOTO_DELETE === 'true',
+      // photo_delete: default true (API always enabled), can be disabled via env
+      photo_delete: process.env.NEXT_PUBLIC_ENABLE_PHOTO_DELETE !== 'false',
       import: process.env.NEXT_PUBLIC_ENABLE_IMPORT !== 'false',
       smart_trace: process.env.NEXT_PUBLIC_ENABLE_SMART_TRACE !== 'false',
     },
