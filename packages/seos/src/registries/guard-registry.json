@@ -353,23 +353,39 @@
       "last_triggered": "2026-02-15T11:00:00.000Z",
       "aging_status": "ACTIVE",
       "status": "ACTIVE"
+    },
+    {
+      "guard_id": "GUARD-DEPLOY-SMOKE-001",
+      "incident_id": "INC-010",
+      "category": "DEPLOY",
+      "root_cause_tag": "deploy_smoke_guard_missing",
+      "type": "BLOCKER",
+      "layer": "CI",
+      "description": "Deploy Smoke Guard - Verify route accessibility before CEO notification",
+      "detection_logic": "scripts/jss-deploy-smoke.mjs: HTTP 200 + assert text present + no DEPLOYMENT_NOT_FOUND",
+      "failure_action": "ceo_notification_blocked",
+      "soak_required": false,
+      "soak_status": "N/A",
+      "last_triggered": "2026-02-15T12:15:00.000Z",
+      "aging_status": "ACTIVE",
+      "status": "ACTIVE"
     }
   ],
   "summary": {
-    "total": 22,
+    "total": 23,
     "by_layer": {
       "RUNTIME": 6,
-      "CI": 12,
+      "CI": 13,
       "BUILD": 2,
       "INFRA": 2
     },
     "by_type": {
       "ASSERTION": 7,
       "VALIDATION": 7,
-      "BLOCKER": 7,
+      "BLOCKER": 8,
       "MONITOR": 1
     },
-    "active": 22,
+    "active": 23,
     "stale": 0,
     "archived": 0
   }

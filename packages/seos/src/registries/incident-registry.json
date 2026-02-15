@@ -154,15 +154,32 @@
       "infra_dependency": false,
       "runbook_link": null,
       "status": "GUARDED"
+    },
+    {
+      "id": "INC-010",
+      "title": "/import-lab 404 DEPLOYMENT_NOT_FOUND",
+      "category": "DEPLOY",
+      "severity": "P1",
+      "app": "jss-web",
+      "date_detected": "2026-02-15",
+      "root_cause_tag": "deploy_smoke_guard_missing",
+      "description": "CEO saw 404 on /import-lab because CTO notified before verifying deployment was accessible. Root cause: @slo/seos missing from Vercel buildCommand.",
+      "guard_added": true,
+      "guard_ids": ["GUARD-DEPLOY-SMOKE-001"],
+      "soak_test_added": false,
+      "soak_id": null,
+      "infra_dependency": false,
+      "runbook_link": null,
+      "status": "GUARDED"
     }
   ],
   "summary": {
-    "total": 9,
-    "guarded": 9,
+    "total": 10,
+    "guarded": 10,
     "open": 0,
     "closed": 0,
     "p0_count": 2,
-    "p1_count": 4,
+    "p1_count": 5,
     "p2_count": 1,
     "infra_count": 2,
     "guard_coverage": 100
