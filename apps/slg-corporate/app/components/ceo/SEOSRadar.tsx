@@ -45,7 +45,9 @@ interface SEOSMetrics {
 }
 
 interface MetricsResponse {
-  metrics: SEOSMetrics | null
+  status: 'healthy' | 'degraded' | 'error'
+  degradedReason?: string
+  metrics: SEOSMetrics
   error?: string
   timestamp: string
 }
@@ -76,7 +78,19 @@ export function SEOSRadar() {
       const json = await response.json()
       setData(json)
     } catch {
-      setData({ metrics: null, error: 'Failed to fetch', timestamp: new Date().toISOString() })
+      setData({
+        status: 'error',
+        metrics: {
+          level: { current: 0, max: 5, floorLockActive: true, floorLockReason: 'Fetch failed', trend: 'stable' },
+          coverage: { percentage: 0, guarded: 0, total: 0, trend: 'stable' },
+          interventionBudget: { used: 0, remaining: 3, total: 3, compliant: true, trend: 'stable' },
+          esi: { value: 0, color: 'red', status: 'Unknown', trend: 'stable' },
+          domainHealth: { healthy: 0, total: 3, percentage: 0, trend: 'stable' },
+          guardAging: { active: 0, stale: 0, archived: 0, stalePercentage: 0, trend: 'stable' },
+        },
+        degradedReason: 'Failed to fetch metrics',
+        timestamp: new Date().toISOString()
+      })
     } finally {
       setLoading(false)
     }
@@ -101,7 +115,10 @@ export function SEOSRadar() {
     )
   }
 
-  if (!data?.metrics) {
+  const isDegraded = data?.status === 'degraded' || data?.status === 'error'
+  const m = data?.metrics
+
+  if (!m) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">SEOS Evolution Radar</h3>
@@ -110,14 +127,20 @@ export function SEOSRadar() {
     )
   }
 
-  const m = data.metrics
-
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">SEOS Evolution Radar</h3>
-        <span className="text-xs text-gray-400">Read-only</span>
+        <span className={`text-xs ${isDegraded ? 'text-yellow-600' : 'text-gray-400'}`}>
+          {isDegraded ? 'Degraded' : 'Read-only'}
+        </span>
       </div>
+
+      {isDegraded && (
+        <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+          ⚠ {data.degradedReason || 'Data may be stale or incomplete'}
+        </div>
+      )}
 
       <table className="w-full text-sm">
         <tbody className="divide-y divide-gray-100">
