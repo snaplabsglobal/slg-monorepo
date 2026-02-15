@@ -25,7 +25,15 @@
 const TARGETS = {
   local: 'http://localhost:3001',
   dev: 'https://jss-web-git-dev-snap-labs-global.vercel.app',
+  prod: 'https://www.jobsitesnap.com',
 } as const
+
+// Production domains that must all return HEALTHY from proof-pack
+const PRODUCTION_DOMAINS = [
+  'https://www.jobsitesnap.com',
+  'https://jss.snaplabs.global',
+  'https://jss-web.vercel.app',
+] as const
 
 type Target = keyof typeof TARGETS
 
@@ -51,6 +59,12 @@ interface RuntimeInfo {
     supabaseProject: string
   }
   sw: { expected_version: string }
+  seos?: {
+    compliant: boolean
+    unresolvedCount: number
+    totalInterventions: number
+    selfHealedCount: number
+  }
   timestamp: string
 }
 
@@ -432,6 +446,205 @@ async function gateE_FeatureFlags(baseUrl: string): Promise<GateResult> {
 }
 
 // ============================================================================
+// GATE G: LOGIN BUTTON + SOAK TEST (10x)
+// ============================================================================
+
+async function gateG_LoginButtonSoak(baseUrl: string): Promise<GateResult> {
+  const details: string[] = []
+  let status: GateResult['status'] = 'PASS'
+  const SOAK_RUNS = 10
+
+  // Assertions to check on each run
+  const assertions = [
+    { name: 'Sign In text', check: (html: string) => html.includes('Sign In') || html.includes('sign in') },
+    { name: 'Submit button', check: (html: string) => html.includes('type="submit"') || html.includes("type='submit'") },
+    { name: 'Form element', check: (html: string) => html.includes('<form') },
+    { name: 'Email input', check: (html: string) => html.includes('type="email"') || html.includes("type='email'") },
+    { name: 'Password input', check: (html: string) => html.includes('type="password"') || html.includes("type='password'") },
+  ]
+
+  let passed = 0
+  let failed = 0
+  const errors: string[] = []
+
+  details.push(`Running soak test: ${SOAK_RUNS} requests to /login`)
+
+  for (let i = 0; i < SOAK_RUNS; i++) {
+    try {
+      const res = await fetch(`${baseUrl}/login`, {
+        method: 'GET',
+        headers: { 'Accept': 'text/html' },
+        cache: 'no-store',
+      })
+
+      if (!res.ok) {
+        failed++
+        errors.push(`Run ${i + 1}: HTTP ${res.status}`)
+        continue
+      }
+
+      const html = await res.text()
+      let runPassed = true
+
+      for (const assertion of assertions) {
+        if (!assertion.check(html)) {
+          runPassed = false
+          errors.push(`Run ${i + 1}: ${assertion.name} missing`)
+        }
+      }
+
+      if (runPassed) {
+        passed++
+      } else {
+        failed++
+      }
+    } catch (err) {
+      failed++
+      errors.push(`Run ${i + 1}: ${(err as Error).message}`)
+    }
+  }
+
+  // Soak result
+  details.push(`Soak result: ${passed}/${SOAK_RUNS} passed`)
+
+  if (failed > 0) {
+    status = 'FAIL'
+    details.push(`ERROR: ${failed} soak runs failed`)
+    for (const error of errors.slice(0, 5)) {
+      details.push(`  → ${error}`)
+    }
+    if (errors.length > 5) {
+      details.push(`  → ... and ${errors.length - 5} more errors`)
+    }
+  } else {
+    details.push('All assertions passed on all runs ✓')
+    details.push('CEO manual verification replaced by soak test ✓')
+  }
+
+  return { gate: 'G: Login Soak (10x)', status, details }
+}
+
+// ============================================================================
+// GATE H: DOMAIN BINDING (Production Only)
+// ============================================================================
+
+interface ProofPackResponse {
+  health?: { status: string }
+  git?: { sha: string }
+}
+
+async function gateH_DomainBinding(): Promise<GateResult> {
+  const details: string[] = []
+  let status: GateResult['status'] = 'PASS'
+
+  details.push(`Checking ${PRODUCTION_DOMAINS.length} production domains...`)
+
+  const results: { domain: string; status: 'HEALTHY' | 'FAIL'; error?: string; sha?: string }[] = []
+
+  for (const domain of PRODUCTION_DOMAINS) {
+    try {
+      const res = await fetch(`${domain}/api/proof-pack`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000), // 10s timeout
+      })
+
+      if (!res.ok) {
+        results.push({ domain, status: 'FAIL', error: `HTTP ${res.status}` })
+        continue
+      }
+
+      const data: ProofPackResponse = await res.json()
+      if (data.health?.status === 'HEALTHY') {
+        results.push({ domain, status: 'HEALTHY', sha: data.git?.sha })
+      } else {
+        results.push({ domain, status: 'FAIL', error: `health.status = ${data.health?.status}` })
+      }
+    } catch (err) {
+      results.push({ domain, status: 'FAIL', error: (err as Error).message })
+    }
+  }
+
+  // Check results
+  const healthy = results.filter(r => r.status === 'HEALTHY')
+  const failed = results.filter(r => r.status === 'FAIL')
+
+  // All domains should return same git sha
+  const shas = new Set(healthy.map(r => r.sha).filter(Boolean))
+  if (shas.size > 1) {
+    status = 'WARN'
+    details.push(`WARN: Domains running different commits: ${[...shas].join(', ')}`)
+  }
+
+  // Report results
+  for (const r of results) {
+    if (r.status === 'HEALTHY') {
+      details.push(`✓ ${r.domain} → HEALTHY (${r.sha || 'unknown sha'})`)
+    } else {
+      details.push(`✗ ${r.domain} → FAIL: ${r.error}`)
+    }
+  }
+
+  // Fail if any domain is not healthy
+  if (failed.length > 0) {
+    status = 'FAIL'
+    details.push(`ERROR: ${failed.length}/${PRODUCTION_DOMAINS.length} domains not healthy`)
+    details.push('  → Run docs/runbooks/jss-domain-binding.md to fix')
+  } else {
+    details.push(`All ${PRODUCTION_DOMAINS.length} domains healthy ✓`)
+  }
+
+  return { gate: 'H: Domain Binding', status, details }
+}
+
+// ============================================================================
+// GATE F: SEOS COMPLIANCE
+// ============================================================================
+
+async function gateF_SeosCompliance(baseUrl: string): Promise<GateResult> {
+  const details: string[] = []
+  let status: GateResult['status'] = 'PASS'
+
+  const runtime = await fetchRuntime(baseUrl)
+  if (!runtime) {
+    return {
+      gate: 'F: SEOS Compliance',
+      status: 'FAIL',
+      details: ['Cannot fetch runtime info'],
+    }
+  }
+
+  // Check if SEOS status is available
+  if (!runtime.seos) {
+    status = 'WARN'
+    details.push('WARN: SEOS status not available in runtime')
+    details.push('  This may be an older deployment without SEOS tracking')
+    return { gate: 'F: SEOS Compliance', status, details }
+  }
+
+  const { seos } = runtime
+
+  // Check compliance (no unresolved interventions)
+  if (seos.compliant) {
+    details.push('SEOS compliant: true ✓')
+    details.push(`intervention_count: 0`)
+    details.push(`self_healed: ${seos.selfHealedCount}`)
+  } else {
+    status = 'FAIL'
+    details.push('ERROR: SEOS not compliant')
+    details.push(`  unresolved_interventions: ${seos.unresolvedCount}`)
+    details.push('  CEO intervention required - violates SEOS governance')
+  }
+
+  // Log total interventions for visibility
+  if (seos.totalInterventions > 0) {
+    details.push(`total_intervention_points: ${seos.totalInterventions}`)
+  }
+
+  return { gate: 'F: SEOS Compliance', status, details }
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -480,6 +693,27 @@ async function runGate0(target: Target) {
   const gateE = await gateE_FeatureFlags(baseUrl)
   gates.push(gateE)
   printGateResult(gateE)
+
+  console.log(header('Gate F: SEOS Compliance'))
+  console.log(subheader('CEO干预计数=0'))
+  const gateF = await gateF_SeosCompliance(baseUrl)
+  gates.push(gateF)
+  printGateResult(gateF)
+
+  console.log(header('Gate G: Login Soak (10x)'))
+  console.log(subheader('Sign In 按钮可见性浸泡测试'))
+  const gateG = await gateG_LoginButtonSoak(baseUrl)
+  gates.push(gateG)
+  printGateResult(gateG)
+
+  // Gate H only runs for prod target
+  if (target === 'prod') {
+    console.log(header('Gate H: Domain Binding'))
+    console.log(subheader('所有生产域名返回 HEALTHY'))
+    const gateH = await gateH_DomainBinding()
+    gates.push(gateH)
+    printGateResult(gateH)
+  }
 
   // Summary
   console.log(header('GATE 0 SUMMARY'))
@@ -552,6 +786,7 @@ if (!targetArg || !TARGETS[targetArg]) {
   console.log('Usage:')
   console.log('  pnpm jss:gate0 --target=local')
   console.log('  pnpm jss:gate0 --target=dev')
+  console.log('  pnpm jss:gate0 --target=prod   # Includes domain binding check')
   process.exit(1)
 }
 
