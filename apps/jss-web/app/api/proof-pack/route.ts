@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateGateFJson, getGateFQuickStatus } from '@/lib/gatef'
 import { calculateESI, getCurrentESI, type ESIInput, type ESIResult } from '@/lib/esi'
 import { getSeosStatus } from '@/lib/intervention-counter'
+import { calculateFullSEOSMetrics, getHealthStatusFromMetrics } from '@/lib/seos'
 
 /**
  * PROOF-PACK ENDPOINT
@@ -227,9 +228,13 @@ export async function GET(request: NextRequest) {
     // Get SEOS status
     const seos = getSeosStatus()
 
+    // Calculate full SEOS metrics (v1.1)
+    const seosMetrics = await calculateFullSEOSMetrics()
+    const healthFromMetrics = getHealthStatusFromMetrics(seosMetrics)
+
     // Build proof-pack response
     const proofPack = {
-      schema: 'seos.proof-pack.v1',
+      schema: 'seos.proof-pack.v1.1',
       app: 'jss-web',
       env: VERCEL_ENV,
       git: {
@@ -255,13 +260,38 @@ export async function GET(request: NextRequest) {
         soak: gateFResult.summary.soak,
       },
 
-      // ESI: Engineering Stability Index
+      // ESI: Engineering Stability Index (7-day)
       esi: {
         value: esi.value,
         color: esi.color,
         status: esi.status,
         breakdown: esi.breakdown,
       },
+
+      // SSI: System Stability Index (30-day)
+      ssi: seosMetrics.ssi,
+
+      // Radar: 5-dimension scoring
+      radar: seosMetrics.radar,
+
+      // Autonomy Level with floor locks
+      level: {
+        base: seosMetrics.level.baseLevel,
+        final: seosMetrics.level.finalLevel,
+        score: seosMetrics.level.baseScore,
+        floorLockActive: seosMetrics.level.floorLockActive,
+        floorLockReason: seosMetrics.level.floorLockReason,
+      },
+
+      // Guard coverage and distribution
+      guards: {
+        coverage: seosMetrics.guardCoverage,
+        layers: seosMetrics.guardLayers,
+        aging: seosMetrics.guardAging,
+      },
+
+      // Operating mode
+      mode: seosMetrics.mode,
 
       // SEOS Intervention Counter
       seos: {
@@ -272,8 +302,8 @@ export async function GET(request: NextRequest) {
 
       // Overall health status for Control Tower
       health: {
-        status: gate0.status === 'PASS' && gateFResult.summary.status === 'PASS' && esi.color !== 'red'
-          ? 'HEALTHY'
+        status: gate0.status === 'PASS' && gateFResult.summary.status === 'PASS' && healthFromMetrics.status !== 'UNHEALTHY'
+          ? healthFromMetrics.status
           : gate0.status === 'FAIL' || esi.color === 'red'
             ? 'UNHEALTHY'
             : 'DEGRADED',
@@ -281,6 +311,7 @@ export async function GET(request: NextRequest) {
         gatef_ok: gateFResult.summary.status === 'PASS',
         esi_ok: esi.color !== 'red',
         seos_ok: seos.compliant,
+        degradation_reasons: healthFromMetrics.reasons,
       },
     }
 

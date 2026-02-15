@@ -1,0 +1,19 @@
+{
+  "name": "@slo/seos",
+  "version": "0.1.0",
+  "description": "SEOS - Self-Engineering Operating System",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "diagnose": "tsx src/cli/diagnose.ts",
+    "intervene": "tsx src/cli/intervene.ts",
+    "metrics": "tsx src/cli/metrics.ts",
+    "probe": "tsx src/cli/probe.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.3"
+  }
+}

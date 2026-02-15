@@ -10,6 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@slo/seos": "workspace:^",
     "@slo/snap-auth": "workspace:^",
     "@slo/snap-ui": "^1.0.0",
     "@supabase/ssr": "^0.8.0",

@@ -9,7 +9,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { AppCard } from '@/components/ceo'
+import { AppCard, SEOSRadar } from '@/components/ceo'
 import type { CEOAppsResponse, AppCard as AppCardType } from '@/lib/ceo/types'
 
 const REFRESH_INTERVAL_MS = 30000 // 30 seconds
@@ -157,6 +157,11 @@ export default function CEOOverviewPage() {
             <p className="text-gray-500">No apps registered.</p>
           </div>
         )}
+
+        {/* SEOS Evolution Radar */}
+        <div className="mt-8">
+          <SEOSRadar />
+        </div>
       </main>
 
       {/* Footer */}

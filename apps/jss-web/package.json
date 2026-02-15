@@ -5,15 +5,20 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
+    "build:gated": "npm run gate0:dev && next build",
     "start": "next start -p 3001",
-    "lint": "eslint"
+    "lint": "eslint",
+    "gate0:dev": "tsx ../../scripts/jss-gate0.ts --target=dev",
+    "gate0:local": "tsx ../../scripts/jss-gate0.ts --target=local"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",
     "@aws-sdk/s3-request-presigner": "^3.975.0",
+    "@slo/seos": "workspace:^",
     "@slo/snap-auth": "workspace:^",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.93.0",
+    "framer-motion": "^12.34.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.1",
     "next-pwa": "^5.6.0",
