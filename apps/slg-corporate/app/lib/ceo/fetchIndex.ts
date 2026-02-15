@@ -14,7 +14,66 @@ import {
 import { getStaleStatus } from './stale'
 
 /**
- * Validate ProofIndex schema
+ * SEOS proof-pack schema (new format)
+ */
+interface SEOSProofPack {
+  schema: string
+  health: { status: string }
+  git?: { sha: string; branch?: string }
+  timestamp: string
+  gate0?: { status: string }
+  gatef?: { status: string }
+  esi?: { value: number; status: string }
+}
+
+/**
+ * Detect and validate SEOS schema
+ */
+function isSEOSSchema(data: unknown): data is SEOSProofPack {
+  if (typeof data !== 'object' || data === null) return false
+  const obj = data as Record<string, unknown>
+  return (
+    typeof obj.schema === 'string' &&
+    obj.schema.startsWith('seos.proof-pack') &&
+    typeof obj.health === 'object' &&
+    obj.health !== null
+  )
+}
+
+/**
+ * Convert SEOS schema to ProofIndex format
+ */
+function convertSEOSToProofIndex(seos: SEOSProofPack): ProofIndex {
+  const isHealthy = seos.health.status === 'HEALTHY'
+  const runId = seos.git?.sha || 'unknown'
+
+  return {
+    version: '1.0',
+    latest_run_id: runId,
+    latest_business_pass: isHealthy,
+    generated_at: seos.timestamp,
+    runs: [
+      {
+        run_id: runId,
+        commit: seos.git?.sha,
+        timestamp: seos.timestamp,
+        business_pass: isHealthy,
+        p0_summary: {
+          total: isHealthy ? 1 : 0,
+          passed: isHealthy ? 1 : 0,
+          failed: isHealthy ? 0 : 1,
+          failed_ids: [],
+        },
+        p0_required_missing: [],
+        p0_required_failed: isHealthy ? [] : ['health_check'],
+        contracts: [],
+      },
+    ],
+  }
+}
+
+/**
+ * Validate ProofIndex schema (legacy format)
  */
 function validateProofIndex(data: unknown): data is ProofIndex {
   if (typeof data !== 'object' || data === null) {
@@ -90,7 +149,13 @@ export async function fetchAppIndex(
 
     const data = await response.json()
 
-    // Schema validation
+    // Try SEOS schema first (new format)
+    if (isSEOSSchema(data)) {
+      const index = convertSEOSToProofIndex(data)
+      return { ok: true, reason: 'ok', index }
+    }
+
+    // Fall back to legacy ProofIndex schema
     if (!validateProofIndex(data)) {
       return { ok: false, reason: 'schema_invalid', index: null }
     }

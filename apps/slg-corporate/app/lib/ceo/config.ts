@@ -15,20 +15,23 @@ export const CEO_APPS: AppConfig[] = [
   {
     id: 'jss',
     label: 'JobSite Snap',
-    proofPackUrl: 'https://jss.snaplabs.global/proof-pack/index.json',
+    proofPackUrl: 'https://jss.snaplabs.global/api/proof-pack',
     productionUrl: 'https://jss.snaplabs.global',
   },
-  {
-    id: 'ls',
-    label: 'LedgerSnap',
-    proofPackUrl: 'https://ledgersnap.app/proof-pack/index.json',
-    productionUrl: 'https://ledgersnap.app',
-  },
+  // LedgerSnap - PAUSED: proof-pack endpoint not deployed yet
+  // Will be re-enabled when ls-web has /api/proof-pack
+  // {
+  //   id: 'ls',
+  //   label: 'LedgerSnap',
+  //   proofPackUrl: 'https://ledgersnap.app/api/proof-pack',
+  //   productionUrl: 'https://ledgersnap.app',
+  //   status: 'paused',
+  // },
   // PlanSnap will be added when ready
   // {
   //   id: 'plansnap',
   //   label: 'PlanSnap',
-  //   proofPackUrl: 'https://plansnap.app/proof-pack/index.json',
+  //   proofPackUrl: 'https://plansnap.app/api/proof-pack',
   //   productionUrl: 'https://plansnap.app',
   // },
 ]
