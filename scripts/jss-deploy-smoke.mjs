@@ -25,9 +25,20 @@ const getArg = (name) => {
 const base = getArg("--base");
 const route = getArg("--route");
 const assertText = getArg("--assert");
+const jsonOutput = args.includes("--json");
 
 if (!base || !route || !assertText) {
-  console.error("Usage: --base <url> --route <path> --assert <text>");
+  console.error("Usage: --base <url> --route <path> --assert <text> [--json]");
+  console.error("");
+  console.error("SEOS Rule: --base must be environment domain (dev.jobsitesnap.com or jobsitesnap.com)");
+  console.error("           *.vercel.app preview URLs are FORBIDDEN for CEO notification");
+  process.exit(1);
+}
+
+// SEOS Rule: Block preview URLs - only environment domains allowed
+if (base.includes('vercel.app')) {
+  console.error("❌ SEOS VIOLATION: Preview URLs (*.vercel.app) are FORBIDDEN");
+  console.error("   Use environment domain: https://dev.jobsitesnap.com or https://jobsitesnap.com");
   process.exit(1);
 }
 
@@ -92,11 +103,54 @@ const url = base.replace(/\/$/, "") + route;
     console.log(`  ASSERT "${assertText}" → PASS`);
     console.log(`\n✅ Guard: Deploy Smoke Guard → PASS`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+    // JSON output for CI integration
+    if (jsonOutput) {
+      const result = {
+        schema: "seos.smoke-status.v0.1",
+        app: "jss-web",
+        generated_at: new Date().toISOString(),
+        environments: [{
+          env,
+          base_url: base,
+          checks: [{
+            route,
+            expect: { status: 200, contains: assertText },
+            result: { status: "pass", http_status: 200, assertion: "pass" }
+          }],
+          overall: "pass",
+          evidence: { log_excerpt: "PASS: Deploy Smoke Guard" }
+        }]
+      };
+      console.log(JSON.stringify(result, null, 2));
+    }
+
     process.exit(0);
   } catch (err) {
     console.log(`  GET ${route} → ERROR`);
     console.log(`\n❌ Guard: Deploy Smoke Guard → FAIL`);
     console.log(`   Reason: ${err.message}`);
+
+    if (jsonOutput) {
+      const result = {
+        schema: "seos.smoke-status.v0.1",
+        app: "jss-web",
+        generated_at: new Date().toISOString(),
+        environments: [{
+          env,
+          base_url: base,
+          checks: [{
+            route,
+            expect: { status: 200, contains: assertText },
+            result: { status: "fail", http_status: null, assertion: "skipped", fail_class: "NETWORK_ERROR" }
+          }],
+          overall: "fail",
+          evidence: { log_excerpt: `FAIL: ${err.message}` }
+        }]
+      };
+      console.log(JSON.stringify(result, null, 2));
+    }
+
     process.exit(1);
   }
 })();
