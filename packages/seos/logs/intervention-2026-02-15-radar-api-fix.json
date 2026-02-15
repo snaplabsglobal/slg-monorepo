@@ -1,0 +1,41 @@
+{
+  "schema": "seos.intervention.v1",
+  "id": "INT-2026-02-15-002",
+  "type": "BUG_FIX",
+  "severity": "P1",
+  "timestamp": "2026-02-15T11:10:00.000Z",
+  "actor": "CTO",
+  "action": "Fix Radar API 500/degraded issue",
+  "context": {
+    "incident_id": "INC-009",
+    "root_cause": [
+      "Edge runtime causing fetch issues in preview",
+      "Missing runtime='nodejs' directive",
+      "Insufficient timeout (5s -> 8s)",
+      "vercel.json missing @slo/seos build"
+    ],
+    "fix_applied": [
+      "Added runtime='nodejs' to force Node.js runtime",
+      "Added dynamic='force-dynamic' for consistent behavior",
+      "Increased timeout to 8s",
+      "Added /api/seos/health diagnostic endpoint",
+      "Updated vercel.json to build @slo/seos"
+    ]
+  },
+  "guard_added": {
+    "guard_id": "GUARD-RADAR-001",
+    "type": "ASSERTION",
+    "layer": "RUNTIME",
+    "detection": "Radar API must return status=healthy"
+  },
+  "resolution": {
+    "status": "FIXED",
+    "verified_by": "Build pass + deploy",
+    "pr_number": "pending"
+  },
+  "budget_impact": {
+    "category": "P1",
+    "cost": 1,
+    "remaining_weekly": 1
+  }
+}

@@ -9,8 +9,12 @@
 
 import { NextResponse } from 'next/server'
 
+// Force Node.js runtime to avoid edge runtime fetch issues
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 const JSS_PROOF_PACK_URL = 'https://jss.snaplabs.global/api/proof-pack'
-const FETCH_TIMEOUT_MS = 5000
+const FETCH_TIMEOUT_MS = 8000
 
 // Safe defaults when data is unavailable
 const SAFE_DEFAULTS = {

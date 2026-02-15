@@ -337,23 +337,39 @@
       "last_triggered": "2026-02-15T06:45:00.000Z",
       "aging_status": "ACTIVE",
       "status": "ACTIVE"
+    },
+    {
+      "guard_id": "GUARD-RADAR-001",
+      "incident_id": "INC-009",
+      "category": "RADAR",
+      "root_cause_tag": "radar_api_failure",
+      "type": "ASSERTION",
+      "layer": "RUNTIME",
+      "description": "Radar API must return status=healthy, never 500 or degraded",
+      "detection_logic": "GET /api/seos/metrics returns 200 + status=healthy within 5s",
+      "failure_action": "radar_degraded_alert",
+      "soak_required": true,
+      "soak_status": "PENDING",
+      "last_triggered": "2026-02-15T11:00:00.000Z",
+      "aging_status": "ACTIVE",
+      "status": "ACTIVE"
     }
   ],
   "summary": {
-    "total": 21,
+    "total": 22,
     "by_layer": {
-      "RUNTIME": 5,
+      "RUNTIME": 6,
       "CI": 12,
       "BUILD": 2,
       "INFRA": 2
     },
     "by_type": {
-      "ASSERTION": 6,
+      "ASSERTION": 7,
       "VALIDATION": 7,
       "BLOCKER": 7,
       "MONITOR": 1
     },
-    "active": 21,
+    "active": 22,
     "stale": 0,
     "archived": 0
   }

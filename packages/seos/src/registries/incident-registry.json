@@ -137,15 +137,32 @@
       "infra_dependency": false,
       "runbook_link": null,
       "status": "GUARDED"
+    },
+    {
+      "id": "INC-009",
+      "title": "Radar API returns 500 or degraded",
+      "category": "RADAR",
+      "severity": "P1",
+      "app": "slg-corporate",
+      "date_detected": "2026-02-15",
+      "root_cause_tag": "radar_api_failure",
+      "description": "SEOS Metrics API returned 500/degraded due to edge runtime and fetch issues",
+      "guard_added": true,
+      "guard_ids": ["GUARD-RADAR-001"],
+      "soak_test_added": true,
+      "soak_id": "SOAK-009",
+      "infra_dependency": false,
+      "runbook_link": null,
+      "status": "GUARDED"
     }
   ],
   "summary": {
-    "total": 8,
-    "guarded": 8,
+    "total": 9,
+    "guarded": 9,
     "open": 0,
     "closed": 0,
     "p0_count": 2,
-    "p1_count": 3,
+    "p1_count": 4,
     "p2_count": 1,
     "infra_count": 2,
     "guard_coverage": 100
