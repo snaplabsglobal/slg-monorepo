@@ -1,0 +1,34 @@
+{
+  "schema": "seos.intervention.v1",
+  "id": "INT-2026-02-15-001",
+  "type": "BYPASS_DEPLOY",
+  "severity": "P2",
+  "timestamp": "2026-02-15T06:45:00.000Z",
+  "actor": "CTO",
+  "action": "Direct push to dev branch without PR",
+  "context": {
+    "commit": "73e3bc79",
+    "branch": "dev",
+    "message": "feat(seos): Evolution Metrics v1.1 + CEO Dashboard Radar",
+    "files_changed": 24,
+    "reason": "SEOS implementation + CEO Dashboard Radar feature"
+  },
+  "gate0_retroactive": {
+    "status": "PASS_WITH_WARNING",
+    "warnings": 1,
+    "passed_gates": ["A", "B", "C", "D", "E", "G"],
+    "warning_gates": ["F"],
+    "timestamp": "2026-02-15T06:45:30.000Z"
+  },
+  "resolution": {
+    "status": "ACCEPTED",
+    "rationale": "Gate0 passed retroactively, dev is preview-only environment",
+    "guard_added": "GUARD-DEPLOY-001",
+    "branch_protection": "pending"
+  },
+  "budget_impact": {
+    "category": "P2",
+    "cost": 1,
+    "remaining_weekly": 2
+  }
+}

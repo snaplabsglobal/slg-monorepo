@@ -1,0 +1,164 @@
+# SEOS Deploy Guard v1.0
+# Incident: INC-008 (bypass-deploy-to-dev)
+# Guards: GUARD-DEPLOY-001, GUARD-DEPLOY-002
+#
+# Rules:
+# - Production: main branch + Gate0 PASS only
+# - Dev: preview environment only (Vercel handles this)
+# - Direct pushes to main: BLOCKED
+
+name: Deploy Guard
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: read
+
+jobs:
+  # ═══════════════════════════════════════════
+  # Block direct pushes to main
+  # ═══════════════════════════════════════════
+  block-direct-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Check if push is from PR merge
+        id: check
+        run: |
+          # Get the commit message
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+
+          # Check if it's a merge commit from PR
+          if echo "$COMMIT_MSG" | grep -qE "^Merge pull request #[0-9]+"; then
+            echo "is_pr_merge=true" >> $GITHUB_OUTPUT
+            echo "✓ This is a PR merge commit, allowed"
+          else
+            echo "is_pr_merge=false" >> $GITHUB_OUTPUT
+            echo "❌ Direct push to main detected!"
+          fi
+
+      - name: Block direct push
+        if: steps.check.outputs.is_pr_merge != 'true'
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "🚫 DEPLOY GUARD: Direct Push Blocked"
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "Direct pushes to main are not allowed."
+          echo "Please create a Pull Request instead."
+          echo ""
+          echo "Guard: GUARD-DEPLOY-001"
+          echo "Incident: INC-008"
+          echo ""
+          exit 1
+
+  # ═══════════════════════════════════════════
+  # Gate0 check for PRs to main
+  # ═══════════════════════════════════════════
+  gate0-for-production:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    name: Gate0 Production Check
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: pnpm build --filter=@slo/seos --filter=@slo/snap-auth --filter=@slo/snap-types
+
+      - name: Run Gate0 for JSS
+        id: gate0_jss
+        run: |
+          echo "Running Gate0 for JSS production deployment..."
+          pnpm --filter=jss-web gate0:dev || {
+            echo "gate0_status=FAIL" >> $GITHUB_OUTPUT
+            exit 1
+          }
+          echo "gate0_status=PASS" >> $GITHUB_OUTPUT
+
+      - name: Gate0 Summary
+        if: always()
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "DEPLOY GUARD: Gate0 Production Check"
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "Target: Production (main branch)"
+          echo "Gate0 Status: ${{ steps.gate0_jss.outputs.gate0_status || 'UNKNOWN' }}"
+          echo ""
+          echo "Guard: GUARD-DEPLOY-001"
+          echo ""
+
+      - name: Comment on PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              "🚫 **Deploy Guard: Production Deploy Blocked**",
+              "",
+              "Gate0 check failed. Production deployments require:",
+              "- Branch: `main`",
+              "- Gate0: `PASS`",
+              "",
+              "Please fix Gate0 issues before merging to main.",
+              "",
+              "---",
+              "*SEOS Deploy Guard v1.0 — GUARD-DEPLOY-001*"
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+  # ═══════════════════════════════════════════
+  # Dev branch: Log deployment (preview only)
+  # ═══════════════════════════════════════════
+  dev-preview-log:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    name: Dev Preview Deployment
+
+    steps:
+      - name: Log dev deployment
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "DEPLOY GUARD: Dev Preview Deployment"
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "Branch: dev"
+          echo "Environment: Preview (Vercel)"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "Note: Dev branch deploys to preview environment only."
+          echo "Production deployments require main + Gate0 PASS."
+          echo ""
+          echo "Guard: GUARD-DEPLOY-002"
+          echo ""

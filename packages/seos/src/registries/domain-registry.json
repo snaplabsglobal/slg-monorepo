@@ -1,0 +1,56 @@
+{
+  "schema": "seos.domain-registry.v1",
+  "generated_at": "2026-02-15T06:30:00.000Z",
+  "apps": [
+    {
+      "app": "JSS",
+      "label": "JobSite Snap",
+      "domains": [
+        {
+          "url": "https://www.jobsitesnap.com",
+          "role": "production_primary",
+          "monitor": true
+        },
+        {
+          "url": "https://jobsitesnap.com",
+          "role": "production_redirect",
+          "monitor": false
+        },
+        {
+          "url": "https://jss.snaplabs.global",
+          "role": "platform_monitor",
+          "monitor": true
+        },
+        {
+          "url": "https://dev.jobsitesnap.com",
+          "role": "development",
+          "monitor": false
+        },
+        {
+          "url": "https://jss-web.vercel.app",
+          "role": "vercel_default",
+          "monitor": true
+        }
+      ]
+    },
+    {
+      "app": "LS",
+      "label": "LedgerSnap",
+      "status": "paused",
+      "pause_reason": "proof-pack endpoint not deployed yet",
+      "domains": [
+        {
+          "url": "https://ledgersnap.app",
+          "role": "production_primary",
+          "monitor": false
+        }
+      ]
+    },
+    {
+      "app": "PLAN",
+      "label": "PlanSnap",
+      "status": "not_started",
+      "domains": []
+    }
+  ]
+}
