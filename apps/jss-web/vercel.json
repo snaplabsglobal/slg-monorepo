@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd ../.. && pnpm --filter @slo/snap-auth build && pnpm --filter @slo/snap-types build && cd apps/jss-web && pnpm build",
+  "buildCommand": "cd ../.. && pnpm --filter @slo/snap-auth build && pnpm --filter @slo/snap-types build && pnpm --filter @slo/seos build && cd apps/jss-web && pnpm build",
   "installCommand": "cd ../.. && pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
