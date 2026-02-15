@@ -36,7 +36,13 @@ const url = base.replace(/\/$/, "") + route;
 (async () => {
   console.log(`\n🔍 Deploy Smoke Guard`);
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.log(`ENV: ${base.includes('git-dev') ? 'dev-preview' : 'production'}`);
+  // Detect environment from domain
+  let env = 'unknown';
+  if (base.includes('dev.jobsitesnap.com')) env = 'dev';
+  else if (base.includes('jobsitesnap.com') || base.includes('jss.snaplabs.global')) env = 'production';
+  else if (base.includes('vercel.app')) env = 'preview (NOT ALLOWED for CEO notification)';
+
+  console.log(`ENV: ${env}`);
   console.log(`BASE_URL: ${base}`);
   console.log(`\nCHECK:`);
 
