@@ -120,15 +120,33 @@
       "infra_dependency": false,
       "runbook_link": null,
       "status": "GUARDED"
+    },
+    {
+      "id": "INC-008",
+      "title": "Direct push to dev bypassing PR",
+      "category": "DEPLOY",
+      "severity": "P2",
+      "app": "monorepo",
+      "date_detected": "2026-02-15",
+      "root_cause_tag": "bypass_deploy_process",
+      "description": "Direct push to dev branch without PR review, Gate0 ran retroactively",
+      "guard_added": true,
+      "guard_ids": ["GUARD-DEPLOY-001", "GUARD-DEPLOY-002"],
+      "soak_test_added": false,
+      "soak_id": null,
+      "infra_dependency": false,
+      "runbook_link": null,
+      "status": "GUARDED"
     }
   ],
   "summary": {
-    "total": 7,
-    "guarded": 7,
+    "total": 8,
+    "guarded": 8,
     "open": 0,
     "closed": 0,
     "p0_count": 2,
     "p1_count": 3,
+    "p2_count": 1,
     "infra_count": 2,
     "guard_coverage": 100
   }

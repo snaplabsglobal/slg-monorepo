@@ -305,23 +305,55 @@
       "last_triggered": "2026-02-15T06:00:00.000Z",
       "aging_status": "ACTIVE",
       "status": "ACTIVE"
+    },
+    {
+      "guard_id": "GUARD-DEPLOY-001",
+      "incident_id": "INC-008",
+      "category": "DEPLOY",
+      "root_cause_tag": "bypass_deploy_process",
+      "type": "BLOCKER",
+      "layer": "CI",
+      "description": "Production deploy requires main branch + Gate0 pass",
+      "detection_logic": "GitHub Actions: production deploy blocked unless branch=main AND gate0=PASS",
+      "failure_action": "deploy_blocked",
+      "soak_required": false,
+      "soak_status": "N/A",
+      "last_triggered": "2026-02-15T06:45:00.000Z",
+      "aging_status": "ACTIVE",
+      "status": "ACTIVE"
+    },
+    {
+      "guard_id": "GUARD-DEPLOY-002",
+      "incident_id": "INC-008",
+      "category": "DEPLOY",
+      "root_cause_tag": "bypass_deploy_process",
+      "type": "VALIDATION",
+      "layer": "CI",
+      "description": "Dev branch deploys to preview only",
+      "detection_logic": "Vercel config: dev branch -> preview environment only",
+      "failure_action": "deploy_redirected",
+      "soak_required": false,
+      "soak_status": "N/A",
+      "last_triggered": "2026-02-15T06:45:00.000Z",
+      "aging_status": "ACTIVE",
+      "status": "ACTIVE"
     }
   ],
   "summary": {
-    "total": 19,
+    "total": 21,
     "by_layer": {
       "RUNTIME": 5,
-      "CI": 10,
+      "CI": 12,
       "BUILD": 2,
       "INFRA": 2
     },
     "by_type": {
       "ASSERTION": 6,
-      "VALIDATION": 6,
-      "BLOCKER": 6,
+      "VALIDATION": 7,
+      "BLOCKER": 7,
       "MONITOR": 1
     },
-    "active": 19,
+    "active": 21,
     "stale": 0,
     "archived": 0
   }
